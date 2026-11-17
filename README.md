@@ -66,3 +66,33 @@ php artisan migrate --seed
 ```
 
 The seeder loads the bootstrap administrators, settings, the six business units, and example logs, flags, data, and logic rules. Automated tests keep using an in-memory SQLite database.
+
+## Mobile API
+
+Native clients use `/api/v1` (`routes/api.php`). These routes are stateless. They do not use the admin session or CSRF. Web administration routes are unchanged.
+
+Public:
+
+- `GET /api/v1/branding` — `app_name`, `logo_url`, `primary_color`, `logo_version` from settings. This endpoint was added because the platform had no branding contract for mobile. Logos are HTTPS or public storage URLs. An `http://` value is not exposed.
+- `POST /api/v1/auth/login` — email or username, password, optional `remember` and `device_name`.
+- `POST /api/v1/auth/refresh` — rotates the refresh token and revokes the previous pair.
+
+Authenticated with `Authorization: Bearer`:
+
+- `POST /api/v1/auth/logout`, `GET /api/v1/profile`
+- `GET /api/v1/tenants` — authorized SBUs only
+- Conversations: list, create, show, logic, `POST .../messages`, `POST .../audio`
+- `GET /api/v1/operations` and `GET /api/v1/operations/{id}`
+- Approvals: list, approve, reject
+- Escalations: list, resolve
+- `GET /api/v1/flags`, `GET /api/v1/access`, `POST /api/v1/feedback`
+
+The JSON envelope is `{ "success", "message", "data" }`. Validation is HTTP 422. A missing or revoked token is HTTP 401. A tenant the administrator cannot access is HTTP 403.
+
+Tokens are returned once. `admin_api_tokens` stores SHA-256 hashes, device name, and expiry. Access tokens last 2 hours, or 14 days when `remember` is true. Refresh tokens last 30 days, or 90 days with remember. Logout sets `revoked_at`.
+
+Accounts with `must_change_password` cannot call the mobile API until the password is changed in the web admin. The bootstrap administrators are created in that state. Login failures for unknown, inactive, and wrong-password accounts share one message.
+
+`GET` conversation and operation routes only read state. Creating a booking, approval, or rejection requires the matching `POST`. Audio upload stores the file and an `AiTranscription` row. With no speech provider configured, `transcript` is null and `provider_configured` is false. The API does not invent a transcript. Supported language codes are `en` and `tl` (`fil` is stored as `tl`).
+
+Connector secrets, base URLs, and key ids are omitted from tenant and access payloads. Logic payloads include intent, parameters, confidence, calibration, missing fields, and eligibility. They do not include chain-of-thought.

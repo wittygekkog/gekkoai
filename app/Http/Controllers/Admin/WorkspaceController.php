@@ -4,11 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\MessageRequest;
-use App\Models\AiAttachment;
 use App\Models\AiConversation;
 use App\Models\AiTranscription;
 use App\Models\Tenant;
 use App\Services\AccessService;
+use App\Services\AudioIntakeService;
 use App\Services\Operations\InstructionPipeline;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,6 +19,7 @@ class WorkspaceController extends Controller
     public function __construct(
         private readonly AccessService $access,
         private readonly InstructionPipeline $pipeline,
+        private readonly AudioIntakeService $audioIntake,
     ) {}
 
     public function index(Request $request): View|RedirectResponse
@@ -83,25 +84,7 @@ class WorkspaceController extends Controller
         $data = $request->validate([
             'audio' => ['required', 'file', 'max:'.config('gekko.audio_max_kilobytes'), 'mimetypes:audio/webm,audio/wav,audio/x-wav,audio/mpeg,audio/ogg,audio/mp4,video/webm'],
         ]);
-        $file = $data['audio'];
-        $path = $file->store('audio/'.$conversation->tenant_id);
-        $attachment = new AiAttachment();
-        $attachment->tenant_id = $conversation->tenant_id;
-        $attachment->file_path = $path;
-        $attachment->mime_type = (string) $file->getMimeType();
-        $attachment->file_size = (int) $file->getSize();
-        $attachment->retention_until = now()->addDays((int) config('gekko.audio_retention_days'));
-        $attachment->save();
-
-        $transcription = new AiTranscription();
-        $transcription->tenant_id = $conversation->tenant_id;
-        $transcription->attachment_id = $attachment->id;
-        $transcription->model_name = 'unconfigured';
-        $transcription->transcription_metadata = [
-            'status' => 'provider_unconfigured',
-            'detail' => 'No speech model is configured. Type the confirmed transcript to continue.',
-        ];
-        $transcription->save();
+        $transcription = $this->audioIntake->store($conversation, $data['audio'], null);
 
         return redirect()->route('admin.workspace.show', $conversation)
             ->with('transcript_id', $transcription->id)

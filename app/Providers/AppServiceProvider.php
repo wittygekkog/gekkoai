@@ -28,7 +28,14 @@ class AppServiceProvider extends ServiceProvider
         Password::defaults(fn () => Password::min(6));
 
         RateLimiter::for('login', function (Request $request): Limit {
-            return Limit::perMinute(5)->by(strtolower((string) $request->input('username')).'|'.$request->ip());
+            $login = strtolower((string) ($request->input('username') ?: $request->input('email')));
+
+            return Limit::perMinute(5)->by($login.'|'.$request->ip());
+        });
+        RateLimiter::for('api', function (Request $request): Limit {
+            $id = $request->user('admin')?->id ?? $request->ip();
+
+            return Limit::perMinute(120)->by('api|'.$id);
         });
         RateLimiter::for('ai', function (Request $request): Limit {
             $id = $request->user('admin')?->id ?? $request->ip();

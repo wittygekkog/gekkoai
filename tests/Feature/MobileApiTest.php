@@ -1,0 +1,167 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\AiOperationRequest;
+use App\Models\SimBooking;
+use Illuminate\Http\UploadedFile;
+use Tests\PlatformTestCase;
+
+class MobileApiTest extends PlatformTestCase
+{
+    public function test_branding_is_public_and_login_rejects_bad_credentials(): void
+    {
+        $this->getJson('/api/v1/branding')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.branding.app_name', 'GekkoAi')
+            ->assertJsonPath('data.branding.primary_color', '#7C3AED');
+
+        $admin = $this->makeAdmin(['email' => 'ada@example.test']);
+        $this->postJson('/api/v1/auth/login', [
+            'email' => $admin->email,
+            'password' => 'wrong-password',
+        ])->assertUnauthorized()
+            ->assertJsonPath('data.code', 'invalid_credentials');
+    }
+
+    public function test_login_returns_a_token_and_logout_revokes_it(): void
+    {
+        $admin = $this->makeAdmin(['email' => 'ada@example.test']);
+        $response = $this->postJson('/api/v1/auth/login', [
+            'email' => 'ada@example.test',
+            'password' => 'secret1',
+            'remember' => true,
+            'device_name' => 'Pixel',
+        ])->assertOk();
+
+        $token = $response->json('data.access_token');
+        $this->assertIsString($token);
+        $this->assertStringStartsWith('gekko_', $token);
+        $this->assertStringNotContainsString('secret1', $response->getContent());
+        $response->assertJsonPath('data.admin.email', $admin->email);
+
+        $this->withToken($token)->getJson('/api/v1/profile')->assertOk()->assertJsonPath('data.admin.email', $admin->email);
+        $this->withToken($token)->postJson('/api/v1/auth/logout')->assertOk();
+        $this->withToken($token)->getJson('/api/v1/profile')->assertUnauthorized();
+    }
+
+    public function test_an_expired_or_missing_token_is_rejected(): void
+    {
+        $this->getJson('/api/v1/tenants')->assertUnauthorized();
+        $this->withToken('gekko_not-a-real-token')->getJson('/api/v1/tenants')->assertUnauthorized();
+    }
+
+    public function test_tenant_list_is_isolated_and_logos_are_urls(): void
+    {
+        $home = $this->makeTenant('the-inner-cove', true);
+        $home->description = 'Coron retreat';
+        $home->logo_path = 'tenants/inner.png';
+        $home->save();
+        $other = $this->makeTenant('pearl-vista', false);
+        $assigned = $this->makeAdmin(['username' => 'cove-only', 'email' => 'cove@example.test', 'admin_type' => 1, 'access_scope' => 'assigned']);
+        $this->assign($assigned, $home, 'sbu_operator');
+
+        $token = $this->tokenFor($assigned);
+        $response = $this->withToken($token)->getJson('/api/v1/tenants')->assertOk();
+        $ids = collect($response->json('data.tenants'))->pluck('id');
+        $this->assertTrue($ids->contains($home->id));
+        $this->assertFalse($ids->contains($other->id));
+        $this->assertStringContainsString('inner.png', (string) $response->json('data.tenants.0.logo_url'));
+
+        $this->withToken($token)->getJson('/api/v1/access?tenant_id='.$other->id)->assertForbidden();
+    }
+
+    public function test_a_message_clarifies_and_refresh_does_not_repeat_the_operation(): void
+    {
+        $admin = $this->makeAdmin();
+        $tenant = $this->makeTenant('the-inner-cove', true);
+        $token = $this->tokenFor($admin);
+
+        $created = $this->withToken($token)->postJson('/api/v1/conversations', [
+            'tenant_id' => $tenant->id,
+        ])->assertCreated();
+        $conversationId = $created->json('data.conversation.id');
+
+        $sent = $this->withToken($token)->postJson('/api/v1/conversations/'.$conversationId.'/messages', [
+            'body' => 'Create a booking for Maria Santos from November 28 to 30 for six guests.',
+        ])->assertOk();
+
+        $sent->assertJsonPath('data.latest_operation.intent', 'booking.create');
+        $sent->assertJsonPath('data.latest_operation.status', 'awaiting_clarification');
+        $this->assertSame(1, AiOperationRequest::query()->count());
+        $this->assertSame(0, SimBooking::query()->count());
+        $messageIds = collect($sent->json('data.messages'))->pluck('id');
+        $this->assertSame($messageIds->count(), $messageIds->unique()->count());
+
+        $this->withToken($token)->getJson('/api/v1/conversations/'.$conversationId)->assertOk();
+        $this->withToken($token)->getJson('/api/v1/conversations/'.$conversationId.'/logic')->assertOk()
+            ->assertJsonPath('data.intent', 'booking.create');
+        $this->assertSame(1, AiOperationRequest::query()->count());
+        $this->assertSame(0, SimBooking::query()->count());
+    }
+
+    public function test_audio_upload_does_not_execute_a_booking(): void
+    {
+        $admin = $this->makeAdmin();
+        $tenant = $this->makeTenant('the-inner-cove', true);
+        $token = $this->tokenFor($admin);
+        $conversationId = $this->withToken($token)->postJson('/api/v1/conversations', [
+            'tenant_id' => $tenant->id,
+        ])->json('data.conversation.id');
+
+        $this->withToken($token)->post('/api/v1/conversations/'.$conversationId.'/audio', [
+            'audio' => UploadedFile::fake()->createWithContent('note.wav', $this->wav()),
+            'language' => 'tl',
+        ])->assertOk()
+            ->assertJsonPath('data.transcription.provider_configured', false)
+            ->assertJsonPath('data.transcription.language', 'tl')
+            ->assertJsonPath('data.transcription.transcript', null);
+
+        $this->assertSame(0, AiOperationRequest::query()->count());
+        $this->assertSame(0, SimBooking::query()->count());
+    }
+
+    public function test_a_viewer_cannot_send_and_cannot_read_another_tenants_conversation(): void
+    {
+        $tenant = $this->makeTenant('the-inner-cove', true);
+        $other = $this->makeTenant('pearl-vista', true);
+        $owner = $this->makeAdmin(['username' => 'owner']);
+        $viewer = $this->makeAdmin(['username' => 'viewer', 'email' => 'viewer@example.test', 'admin_type' => 1, 'access_scope' => 'assigned']);
+        $this->assign($viewer, $tenant, 'sbu_viewer');
+
+        $ownerToken = $this->tokenFor($owner);
+        $foreignId = $this->withToken($ownerToken)->postJson('/api/v1/conversations', [
+            'tenant_id' => $other->id,
+        ])->json('data.conversation.id');
+
+        $viewerToken = $this->tokenFor($viewer);
+        $this->withToken($viewerToken)->getJson('/api/v1/conversations/'.$foreignId)->assertForbidden();
+
+        $ownId = $this->withToken($ownerToken)->postJson('/api/v1/conversations', [
+            'tenant_id' => $tenant->id,
+        ])->json('data.conversation.id');
+        $this->withToken($viewerToken)->postJson('/api/v1/conversations/'.$ownId.'/messages', [
+            'body' => 'Create a booking for Maria Santos.',
+        ])->assertForbidden();
+        $this->assertSame(0, AiOperationRequest::query()->count());
+    }
+
+    private function tokenFor(\App\Models\Admin $admin): string
+    {
+        return (string) $this->postJson('/api/v1/auth/login', [
+            'email' => $admin->email,
+            'password' => 'secret1',
+        ])->assertOk()->json('data.access_token');
+    }
+
+    private function wav(): string
+    {
+        $pcm = str_repeat("\0", 32);
+        $size = 36 + strlen($pcm);
+
+        return 'RIFF'.pack('V', $size).'WAVEfmt '.pack('V', 16)
+            .pack('v', 1).pack('v', 1).pack('V', 8000).pack('V', 8000)
+            .pack('v', 1).pack('v', 8).'data'.pack('V', strlen($pcm)).$pcm;
+    }
+}

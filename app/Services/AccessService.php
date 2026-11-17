@@ -58,6 +58,71 @@ final class AccessService
     }
 
     /**
+     * Permission names the mobile Access tab may display.
+     * Android must not treat this list as the security boundary.
+     *
+     * @return list<string>
+     */
+    public function permissionNames(Admin $admin, ?Tenant $tenant): array
+    {
+        if ($admin->isSuperAdmin()) {
+            return array_merge($this->platformPermissions(), ['settings.manage']);
+        }
+        if ($admin->access_scope === 'platform') {
+            return $this->platformPermissions();
+        }
+        if (! $tenant instanceof Tenant) {
+            return [];
+        }
+        $membership = TenantUser::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('user_id', $admin->id)
+            ->where('status', 'active')
+            ->first();
+        if (! $membership instanceof TenantUser) {
+            return [];
+        }
+        $permissions = self::ROLES[$membership->role] ?? [];
+
+        return array_values($permissions);
+    }
+
+    public function membershipRole(Admin $admin, Tenant $tenant): ?string
+    {
+        if ($admin->isSuperAdmin() || $admin->access_scope === 'platform') {
+            return $admin->isSuperAdmin() ? 'superadmin' : 'platform_admin';
+        }
+        $membership = TenantUser::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('user_id', $admin->id)
+            ->where('status', 'active')
+            ->first();
+
+        return $membership instanceof TenantUser ? $membership->role : null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function platformPermissions(): array
+    {
+        return [
+            'tenants.view',
+            'tenants.manage',
+            'ai.chat.use',
+            'ai.operations.execute',
+            'ai.operations.retry',
+            'ai.operations.approve',
+            'ai.operations.reject',
+            'ai.audit.view',
+            'ai.memory.review',
+            'ai.memory.manage',
+            'ai.escalations.resolve',
+            'ai.connectors.manage',
+        ];
+    }
+
+    /**
      * General Administration uses "general" or "all". Anything else is one SBU id.
      */
     public function isSpecificTenant(mixed $selected): bool

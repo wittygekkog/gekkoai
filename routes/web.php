@@ -12,7 +12,6 @@ use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Admin\SystemController;
 use App\Http\Controllers\Admin\TenantController;
 use App\Http\Controllers\Admin\WorkspaceController;
-use App\Http\Controllers\Api\V1\PlatformApiController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -85,19 +84,6 @@ Route::middleware(['auth:admin', 'admin.active', 'password.changed'])->group(fun
     Route::get('/admin/access/{admin}/edit', [AccessController::class, 'edit'])->name('admin.access.edit');
     Route::patch('/admin/access/{admin}', [AccessController::class, 'update'])->name('admin.access.update');
     Route::delete('/admin/access/{admin}', [AccessController::class, 'destroy'])->name('admin.access.destroy');
-
-    Route::prefix('api/v1')->middleware('throttle:ai')->group(function (): void {
-        Route::get('/tenants', [PlatformApiController::class, 'tenants']);
-        Route::get('/conversations', [PlatformApiController::class, 'conversations']);
-        Route::post('/conversations', [PlatformApiController::class, 'storeConversation']);
-        Route::post('/conversations/{conversation}/messages', [PlatformApiController::class, 'message']);
-        Route::get('/operations', [PlatformApiController::class, 'operations']);
-        Route::get('/operations/{operation}', [PlatformApiController::class, 'showOperation']);
-        Route::post('/approvals/{approval}/approve', [PlatformApiController::class, 'approve']);
-        Route::post('/approvals/{approval}/reject', [PlatformApiController::class, 'reject']);
-        Route::get('/escalations', [PlatformApiController::class, 'escalations']);
-        Route::post('/feedback', [PlatformApiController::class, 'feedback']);
-    });
 });
 
 Route::middleware(['auth:admin', 'admin.active', 'password.changed', 'superadmin'])->group(function (): void {
