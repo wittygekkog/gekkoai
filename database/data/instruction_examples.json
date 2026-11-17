@@ -1,0 +1,14 @@
+[
+  {"instruction": "Create a booking for Maria Santos from November 28 to 30 for six guests.", "intent": "booking.create"},
+  {"instruction": "Is the villa available from December 5 to December 8 for four guests?", "intent": "booking.check_availability"},
+  {"instruction": "Show booking reference a1b2c3d4", "intent": "booking.get"},
+  {"instruction": "Cancel booking reference a1b2c3d4", "intent": "booking.cancel"},
+  {"instruction": "Book Ana Reyes from December 10 to December 12 for two guests.", "intent": "booking.create"},
+  {"instruction": "Check availability for January 2 to January 5, eight guests.", "intent": "booking.check_availability"},
+  {"instruction": "Delete all customers from the database.", "intent": "unsupported"},
+  {"instruction": "Mag-book para kay Juan Cruz mula November 28 hanggang November 30, anim na bisita.", "intent": "booking.create"},
+  {"instruction": "What is the status of booking a1b2c3d4?", "intent": "booking.get"},
+  {"instruction": "Reserve the retreat for Sofia Lim, March 1 to March 4, 10 guests.", "intent": "booking.create"},
+  {"instruction": "Bakante ba ang dates from April 2 to April 6 for five guests?", "intent": "booking.check_availability"},
+  {"instruction": "Update booking reference a1b2c3d4 and change the guest count to four.", "intent": "booking.update"}
+]
