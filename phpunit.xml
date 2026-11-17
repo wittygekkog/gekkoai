@@ -36,5 +36,9 @@
         <env name="GEKKO_ALLOW_LIVE_CONNECTORS" value="false"/>
         <env name="SBU_SIMULATION_KEY_ID" value="sim-inner-cove"/>
         <env name="SBU_SIMULATION_SECRET" value="test-connector-secret"/>
+        <env name="GITHUB_WEBHOOK_SECRET" value=""/>
+        <env name="GITHUB_DEPLOY_TOKEN" value=""/>
+        <env name="GITHUB_DEPLOY_OWNER" value="mansouranos"/>
+        <env name="GITHUB_DEPLOY_REPO" value="gekkoai"/>
     </php>
 </phpunit>

@@ -78,9 +78,78 @@ class AccessTest extends PlatformTestCase
 
     public function test_the_deploy_webhook_does_not_run_without_a_secret(): void
     {
+        config(['services.github.webhook_secret' => '', 'services.github.deploy_token' => '']);
+
         $this->post('/github/deploy', ['ref' => 'refs/heads/main'])
+            ->assertStatus(503)
+            ->assertJsonPath('status', 'error')
+            ->assertJsonPath('message', 'Webhook not configured');
+    }
+
+    public function test_the_deploy_webhook_rejects_a_bad_signature(): void
+    {
+        config(['services.github.webhook_secret' => 'test-webhook-secret', 'services.github.deploy_token' => '']);
+
+        $this->call('POST', '/github/deploy', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_ACCEPT' => 'application/json',
+            'HTTP_X_HUB_SIGNATURE_256' => 'sha256=not-the-signature',
+        ], '{"ref":"refs/heads/main"}')
             ->assertForbidden()
-            ->assertJsonPath('success', false);
+            ->assertJsonPath('message', 'Invalid signature');
+    }
+
+    public function test_the_deploy_webhook_ignores_branches_other_than_main(): void
+    {
+        $secret = 'test-webhook-secret';
+        $payload = '{"ref":"refs/heads/develop","pusher":{"name":"octocat"},"after":"abc1234ffff"}';
+        config(['services.github.webhook_secret' => $secret, 'services.github.deploy_token' => '']);
+
+        $this->call('POST', '/github/deploy', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_ACCEPT' => 'application/json',
+            'HTTP_X_HUB_SIGNATURE_256' => 'sha256='.hash_hmac('sha256', $payload, $secret),
+        ], $payload)
+            ->assertOk()
+            ->assertJsonPath('status', 'ignored');
+
+        $this->assertDatabaseHas('ai_audit_logs', [
+            'event_type' => 'deploy.webhook',
+            'resource_type' => 'github',
+        ]);
+    }
+
+    public function test_a_signed_main_push_stops_when_the_deploy_token_is_missing(): void
+    {
+        $secret = 'test-webhook-secret';
+        $payload = '{"ref":"refs/heads/main","pusher":{"name":"octocat"},"after":"abc1234ffff"}';
+        config([
+            'services.github.webhook_secret' => $secret,
+            'services.github.deploy_token' => '',
+            'services.github.deploy_owner' => 'mansouranos',
+            'services.github.deploy_repo' => 'gekkoai',
+        ]);
+
+        $this->call('POST', '/github/deploy', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_ACCEPT' => 'application/json',
+            'HTTP_X_HUB_SIGNATURE_256' => 'sha256='.hash_hmac('sha256', $payload, $secret),
+        ], $payload)
+            ->assertStatus(503)
+            ->assertJsonPath('message', 'Deploy token not configured');
+    }
+
+    public function test_only_a_superadmin_can_open_the_deploy_page(): void
+    {
+        $admin = $this->makeAdmin(['username' => 'platform', 'admin_type' => 1, 'access_scope' => 'platform']);
+        $this->actingAs($admin, 'admin')->get('/github/deploy')->assertForbidden();
+
+        $owner = $this->makeAdmin(['username' => 'manuel', 'admin_type' => 0]);
+        $this->actingAs($owner, 'admin')
+            ->get('/github/deploy')
+            ->assertOk()
+            ->assertSee('POST /github/deploy')
+            ->assertSee('mansouranos/gekkoai');
     }
 
     public function test_the_home_page_sends_guests_to_the_login_screen(): void

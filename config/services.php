@@ -35,4 +35,16 @@ return [
         ],
     ],
 
+    // GitHub deploy webhook (same contract as the webpay modern /github/deploy hook).
+    // webhook_secret: shared secret used to verify X-Hub-Signature-256.
+    // deploy_token : fine-grained PAT used to fetch the repo over HTTPS.
+    //                It is passed to git as an ephemeral URL token and never
+    //                written to .git/config.
+    'github' => [
+        'webhook_secret' => env('GITHUB_WEBHOOK_SECRET'),
+        'deploy_token' => env('GITHUB_DEPLOY_TOKEN'),
+        'deploy_owner' => env('GITHUB_DEPLOY_OWNER', 'mansouranos'),
+        'deploy_repo' => env('GITHUB_DEPLOY_REPO', 'gekkoai'),
+    ],
+
 ];
