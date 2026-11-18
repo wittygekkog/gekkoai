@@ -85,7 +85,7 @@ Authenticated with `Authorization: Bearer`:
 - `GET /api/v1/operations` and `GET /api/v1/operations/{id}`
 - Approvals: list, approve, reject
 - Escalations: list, resolve
-- `GET /api/v1/rules`, `POST /api/v1/rules`, `PATCH /api/v1/rules/{id}` — standing rules for the selected SBU. Writing requires `ai.memory.manage`.
+- `GET /api/v1/rules`, `POST /api/v1/rules/chat`, `POST /api/v1/rules`, `PATCH /api/v1/rules/{id}` — standing rules for the selected SBU. Chat drafts a title and statement. Saving requires `ai.memory.manage`.
 - `GET /api/v1/documents`, `GET /api/v1/documents/{id}`, `POST`, `PATCH`, `POST .../approve`, `DELETE` — knowledge documents. A new or edited document stays `pending` until approval. File storage paths are not returned.
 - `GET /api/v1/flags`, `GET /api/v1/access`, `POST /api/v1/feedback`
 

@@ -39,6 +39,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/escalations', [PlatformApiController::class, 'escalations'])->name('api.v1.escalations');
         Route::post('/escalations/{escalation}/resolve', [PlatformApiController::class, 'resolveEscalation'])->name('api.v1.escalations.resolve');
         Route::get('/rules', [PlatformApiController::class, 'rules'])->name('api.v1.rules');
+        Route::post('/rules/chat', [PlatformApiController::class, 'chatRule'])->name('api.v1.rules.chat');
         Route::post('/rules', [PlatformApiController::class, 'storeRule'])->name('api.v1.rules.store');
         Route::patch('/rules/{rule}', [PlatformApiController::class, 'updateRule'])->name('api.v1.rules.update');
         Route::get('/documents', [PlatformApiController::class, 'documents'])->name('api.v1.documents');

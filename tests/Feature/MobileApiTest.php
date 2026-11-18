@@ -225,6 +225,49 @@ class MobileApiTest extends PlatformTestCase
         $this->assertSame(1, AiLogicItem::query()->count());
     }
 
+    public function test_rule_chat_drafts_the_same_way_as_the_admin_screen(): void
+    {
+        $tenant = $this->makeTenant('the-inner-cove');
+        $other = $this->makeTenant('pearl-vista');
+        $admin = $this->makeAdmin(['username' => 'rule-chat', 'email' => 'rule-chat@example.test']);
+        $viewer = $this->makeAdmin(['username' => 'rule-chat-viewer', 'email' => 'rule-chat-viewer@example.test']);
+        $this->assign($viewer, $tenant, 'sbu_viewer');
+        $token = $this->tokenFor($admin);
+
+        $draft = $this->withToken($token)->postJson('/api/v1/rules/chat', [
+            'tenant_id' => $tenant->id,
+            'message' => 'Always ask for the guest name before booking',
+        ])->assertOk()
+            ->assertJsonPath('data.title', 'Always ask for the guest name before booking')
+            ->assertJsonPath('data.body', 'Always ask for the guest name before booking.');
+
+        $ruleId = $this->withToken($token)->postJson('/api/v1/rules', [
+            'tenant_id' => $tenant->id,
+            'title' => $draft->json('data.title'),
+            'body' => $draft->json('data.body'),
+        ])->assertCreated()->json('data.rule.id');
+
+        $this->withToken($token)->postJson('/api/v1/rules/chat', [
+            'tenant_id' => $tenant->id,
+            'rule_id' => $ruleId,
+            'title' => $draft->json('data.title'),
+            'body' => $draft->json('data.body'),
+            'message' => 'change the statement to ask for the stay dates',
+        ])->assertOk()
+            ->assertJsonPath('data.title', 'Always ask for the guest name before booking')
+            ->assertJsonPath('data.body', 'ask for the stay dates.');
+
+        $this->withToken($this->tokenFor($viewer))->postJson('/api/v1/rules/chat', [
+            'tenant_id' => $tenant->id,
+            'message' => 'A viewer cannot draft a rule',
+        ])->assertForbidden();
+        $this->withToken($this->tokenFor($viewer))->postJson('/api/v1/rules/chat', [
+            'tenant_id' => $other->id,
+            'message' => 'Another business unit',
+        ])->assertForbidden();
+        $this->assertSame(1, AiLogicItem::query()->count());
+    }
+
     private function tokenFor(\App\Models\Admin $admin): string
     {
         return (string) $this->postJson('/api/v1/auth/login', [

@@ -18,6 +18,7 @@ use App\Services\AudioIntakeService;
 use App\Services\KnowledgeService;
 use App\Services\LogicService;
 use App\Services\Mobile\PlatformPayload;
+use App\Services\RuleChatService;
 use App\Services\Operations\InstructionPipeline;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -35,6 +36,7 @@ class PlatformApiController extends Controller
         private readonly AudioIntakeService $audio,
         private readonly LogicService $logic,
         private readonly KnowledgeService $knowledge,
+        private readonly RuleChatService $rules,
     ) {}
 
     public function tenants(Request $request): JsonResponse
@@ -292,6 +294,34 @@ class PlatformApiController extends Controller
             'can_manage' => $this->access->allows($admin, $tenant, 'ai.memory.manage'),
             'rules' => $rules,
         ]);
+    }
+
+    public function chatRule(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'tenant_id' => ['required', 'uuid'],
+            'rule_id' => ['nullable', 'uuid'],
+            'message' => ['required', 'string', 'max:4000'],
+            'title' => ['nullable', 'string', 'max:180'],
+            'body' => ['nullable', 'string', 'max:5000'],
+        ]);
+        $tenant = $this->tenant($request, $data['tenant_id']);
+        $this->access->assert($this->admin($request), $tenant, 'ai.memory.manage');
+
+        $title = $data['title'] ?? null;
+        $body = $data['body'] ?? null;
+        if (! empty($data['rule_id'])) {
+            $rule = AiLogicItem::query()
+                ->where('tenant_id', $tenant->id)
+                ->where('kind', 'rule')
+                ->findOrFail($data['rule_id']);
+            $title = ($title === null || $title === '') ? $rule->title : $title;
+            $body = ($body === null || $body === '') ? $rule->body : $body;
+        }
+
+        $draft = $this->rules->draft($data['message'], is_string($title) ? $title : null, is_string($body) ? $body : null);
+
+        return $this->ok($draft['reply'], $draft);
     }
 
     public function storeRule(Request $request): JsonResponse
