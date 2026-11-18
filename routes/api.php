@@ -38,6 +38,15 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/approvals/{approval}/reject', [PlatformApiController::class, 'reject'])->name('api.v1.approvals.reject');
         Route::get('/escalations', [PlatformApiController::class, 'escalations'])->name('api.v1.escalations');
         Route::post('/escalations/{escalation}/resolve', [PlatformApiController::class, 'resolveEscalation'])->name('api.v1.escalations.resolve');
+        Route::get('/rules', [PlatformApiController::class, 'rules'])->name('api.v1.rules');
+        Route::post('/rules', [PlatformApiController::class, 'storeRule'])->name('api.v1.rules.store');
+        Route::patch('/rules/{rule}', [PlatformApiController::class, 'updateRule'])->name('api.v1.rules.update');
+        Route::get('/documents', [PlatformApiController::class, 'documents'])->name('api.v1.documents');
+        Route::post('/documents', [PlatformApiController::class, 'storeDocument'])->name('api.v1.documents.store');
+        Route::get('/documents/{document}', [PlatformApiController::class, 'showDocument'])->name('api.v1.documents.show');
+        Route::patch('/documents/{document}', [PlatformApiController::class, 'updateDocument'])->name('api.v1.documents.update');
+        Route::post('/documents/{document}/approve', [PlatformApiController::class, 'approveDocument'])->name('api.v1.documents.approve');
+        Route::delete('/documents/{document}', [PlatformApiController::class, 'deleteDocument'])->name('api.v1.documents.delete');
         Route::get('/flags', [PlatformApiController::class, 'flags'])->name('api.v1.flags');
         Route::get('/access', [PlatformApiController::class, 'access'])->name('api.v1.access');
         Route::post('/feedback', [PlatformApiController::class, 'feedback'])->name('api.v1.feedback');

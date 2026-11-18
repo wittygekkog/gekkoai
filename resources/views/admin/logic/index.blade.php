@@ -2,18 +2,17 @@
 @section('title', 'Logic')
 @section('crumb', 'Logic')
 @section('content')
-<div class="page-head d-flex justify-content-between align-items-end gap-3 flex-wrap">
-    <div>
+<div class="page-head d-flex justify-content-between align-items-center gap-3 flex-wrap">
+    <div class="min-w-0">
         <h1>Logic</h1>
         <p>Rules the workspace must follow. A rule does not grant a tool or skip approval.</p>
     </div>
     @if ($canManage)
-        <button class="btn btn-gk" type="button" data-bs-toggle="offcanvas" data-bs-target="#logicChat" data-logic-mode="create">Add a rule</button>
+        <button class="btn btn-gk flex-shrink-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#logicChat" data-logic-mode="create">Add a rule</button>
     @endif
 </div>
 
-<section class="gk-card">
-    <h2 class="block-title">Rules</h2>
+<section class="gk-card gk-list-card">
     @if ($rules->isEmpty())
         <p class="mb-0">No rules yet.</p>
     @else
@@ -43,7 +42,9 @@
             @endforeach
         </div>
     @endif
-    <div class="mt-3">{{ $rules->links('pagination::bootstrap-5') }}</div>
+    @if ($rules->hasPages())
+        <div class="mt-2">{{ $rules->links('pagination::bootstrap-5') }}</div>
+    @endif
 </section>
 
 @if ($canManage)

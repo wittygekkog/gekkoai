@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\AiKnowledgeDocument;
+use App\Models\AiLogicItem;
 use App\Models\AiOperationRequest;
 use App\Models\SimBooking;
 use Illuminate\Http\UploadedFile;
@@ -146,6 +148,81 @@ class MobileApiTest extends PlatformTestCase
             'body' => 'Create a booking for Maria Santos.',
         ])->assertForbidden();
         $this->assertSame(0, AiOperationRequest::query()->count());
+    }
+
+    public function test_rules_and_documents_match_the_admin_screens(): void
+    {
+        $tenant = $this->makeTenant('the-inner-cove');
+        $other = $this->makeTenant('pearl-vista');
+        $admin = $this->makeAdmin(['username' => 'logic-admin', 'email' => 'logic@example.test']);
+        $viewer = $this->makeAdmin(['username' => 'logic-viewer', 'email' => 'logic-viewer@example.test']);
+        $this->assign($viewer, $tenant, 'sbu_viewer');
+        $token = $this->tokenFor($admin);
+        $viewerToken = $this->tokenFor($viewer);
+
+        $ruleId = $this->withToken($token)->postJson('/api/v1/rules', [
+            'tenant_id' => $tenant->id,
+            'title' => 'Ask for the guest name',
+            'body' => 'Always ask for the guest name before booking.',
+        ])->assertCreated()->json('data.rule.id');
+
+        $this->withToken($token)->getJson('/api/v1/rules?tenant_id='.$tenant->id)
+            ->assertOk()
+            ->assertJsonPath('data.can_manage', true)
+            ->assertJsonPath('data.rules.data.0.id', $ruleId)
+            ->assertJsonPath('data.rules.data.0.status', 'active');
+
+        $this->withToken($token)->patchJson('/api/v1/rules/'.$ruleId, [
+            'title' => 'Ask for the guest name',
+            'body' => 'Ask for the guest name and the stay dates.',
+        ])->assertOk()->assertJsonPath('data.rule.body', 'Ask for the guest name and the stay dates.');
+
+        $this->withToken($viewerToken)->getJson('/api/v1/rules?tenant_id='.$tenant->id)
+            ->assertOk()
+            ->assertJsonPath('data.can_manage', false);
+        $this->withToken($viewerToken)->postJson('/api/v1/rules', [
+            'tenant_id' => $tenant->id,
+            'title' => 'Blocked',
+            'body' => 'A viewer cannot write rules.',
+        ])->assertForbidden();
+        $this->withToken($viewerToken)->getJson('/api/v1/rules?tenant_id='.$other->id)->assertForbidden();
+
+        $documentId = $this->withToken($token)->postJson('/api/v1/documents', [
+            'tenant_id' => $tenant->id,
+            'title' => 'House rules',
+            'content' => 'Quiet hours start at 22:00.',
+        ])->assertCreated()
+            ->assertJsonPath('data.document.approval_status', 'pending')
+            ->json('data.document.id');
+
+        $listed = $this->withToken($token)->getJson('/api/v1/documents?tenant_id='.$tenant->id)
+            ->assertOk()
+            ->assertJsonPath('data.documents.data.0.approval_status', 'pending')
+            ->json('data.documents.data.0');
+        $this->assertArrayNotHasKey('content', $listed);
+        $this->assertArrayNotHasKey('source_reference', $listed);
+        $this->assertSame('pending', AiKnowledgeDocument::query()->find($documentId)->approval_status);
+
+        $this->withToken($token)->getJson('/api/v1/documents/'.$documentId)
+            ->assertOk()
+            ->assertJsonPath('data.document.content', 'Quiet hours start at 22:00.');
+
+        $this->withToken($token)->postJson('/api/v1/documents/'.$documentId.'/approve')
+            ->assertOk()
+            ->assertJsonPath('data.document.approval_status', 'approved');
+        $this->withToken($token)->postJson('/api/v1/documents/'.$documentId.'/approve')
+            ->assertOk()
+            ->assertJsonPath('data.document.approval_status', 'approved');
+
+        $this->withToken($token)->patchJson('/api/v1/documents/'.$documentId, [
+            'title' => 'House rules',
+            'content' => 'Quiet hours start at 21:00.',
+        ])->assertOk()->assertJsonPath('data.document.approval_status', 'pending');
+
+        $this->withToken($viewerToken)->deleteJson('/api/v1/documents/'.$documentId)->assertForbidden();
+        $this->withToken($token)->deleteJson('/api/v1/documents/'.$documentId)->assertOk();
+        $this->assertSame(0, AiKnowledgeDocument::query()->count());
+        $this->assertSame(1, AiLogicItem::query()->count());
     }
 
     private function tokenFor(\App\Models\Admin $admin): string

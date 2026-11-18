@@ -9,6 +9,8 @@ use App\Models\AiApproval;
 use App\Models\AiClarification;
 use App\Models\AiConversation;
 use App\Models\AiEscalation;
+use App\Models\AiKnowledgeDocument;
+use App\Models\AiLogicItem;
 use App\Models\AiMessage;
 use App\Models\AiOperationRequest;
 use App\Models\AiTranscription;
@@ -251,6 +253,55 @@ final class PlatformPayload
             ])->values(),
             'connector' => $this->connector($tenant->connector),
         ];
+    }
+
+    /**
+     * One standing rule. The body is guidance only and does not grant a tool.
+     *
+     * @return array<string, mixed>
+     */
+    public function rule(AiLogicItem $rule): array
+    {
+        $rule->loadMissing('tenant');
+
+        return [
+            'id' => $rule->id,
+            'tenant_id' => $rule->tenant_id,
+            'tenant_name' => $rule->tenant?->name,
+            'title' => $rule->title,
+            'body' => $rule->body,
+            'status' => $rule->status,
+            'updated_at' => $rule->updated_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Knowledge document for the Data tab.
+     * The private storage path is never returned. Full text is only included on an explicit read.
+     *
+     * @return array<string, mixed>
+     */
+    public function document(AiKnowledgeDocument $document, bool $withContent): array
+    {
+        $document->loadMissing('tenant');
+        $path = (string) $document->source_reference;
+        $text = (string) $document->content;
+        $payload = [
+            'id' => $document->id,
+            'tenant_id' => $document->tenant_id,
+            'tenant_name' => $document->tenant?->name,
+            'title' => $document->title,
+            'approval_status' => $document->approval_status,
+            'source_type' => $document->source_type,
+            'has_file' => str_starts_with($path, 'knowledge/'),
+            'excerpt' => mb_substr($text, 0, 240),
+            'updated_at' => $document->updated_at?->toIso8601String(),
+        ];
+        if ($withContent) {
+            $payload['content'] = $text;
+        }
+
+        return $payload;
     }
 
     /**

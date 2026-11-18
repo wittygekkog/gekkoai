@@ -2,9 +2,11 @@
 @section('title', 'Data')
 @section('crumb', 'Data')
 @section('content')
-@php($columns = $selectedTenant ? 4 : 5)
-<div class="page-head d-flex justify-content-between align-items-end gap-3 flex-wrap">
-    <div>
+@php
+    $columns = $selectedTenant ? 4 : 5;
+@endphp
+<div class="page-head d-flex justify-content-between align-items-center gap-3 flex-wrap">
+    <div class="min-w-0">
         <h1>Data</h1>
         @if ($selectedTenant)
             <p>Documents for {{ $selectedTenant->name }}. Only approved documents can be retrieved, and they cannot grant tools.</p>
@@ -13,17 +15,16 @@
         @endif
     </div>
     @if ($canManage)
-        <button class="btn btn-gk" type="button" data-bs-toggle="offcanvas" data-bs-target="#knowledgeFormCanvas" data-knowledge-mode="create">Add a document</button>
+        <button class="btn btn-gk flex-shrink-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#knowledgeFormCanvas" data-knowledge-mode="create">Add a document</button>
     @endif
 </div>
 
-<section class="gk-card">
-    <h2 class="block-title">Documents</h2>
+<section class="gk-card gk-list-card">
     <div class="table-responsive">
         <table class="table table-striped table-bordered align-middle gk-table mb-0">
             <thead>
                 <tr>
-                    <th>Title</th>
+                    <th class="gk-main">Title</th>
                     @unless ($selectedTenant)
                         <th>SBU</th>
                     @endunless
@@ -34,30 +35,45 @@
             </thead>
             <tbody>
             @forelse ($documents as $document)
+                @php
+                    $hasFile = is_string($document->source_reference) && str_starts_with($document->source_reference, 'knowledge/');
+                    $excerpt = \Illuminate\Support\Str::limit(trim((string) preg_replace('/\s+/', ' ', (string) $document->content)), 140);
+                    $statusClass = match ($document->approval_status) {
+                        'approved' => 'badge-ok',
+                        'pending' => 'badge-wait',
+                        'rejected' => 'badge-bad',
+                        default => 'badge-info',
+                    };
+                @endphp
                 <tr>
-                    <td>{{ $document->title }}</td>
+                    <td class="gk-main">
+                        <div class="gk-doc-title">{{ $document->title }}</div>
+                        @if ($excerpt !== '')
+                            <div class="gk-doc-excerpt">{{ $excerpt }}</div>
+                        @endif
+                    </td>
                     @unless ($selectedTenant)
                         <td>{{ $document->tenant->name }}</td>
                     @endunless
                     <td class="fit">
-                        @if (is_string($document->source_reference) && str_starts_with($document->source_reference, 'knowledge/'))
-                            <a href="{{ route('admin.knowledge.file', $document) }}">Download</a>
+                        @if ($hasFile)
+                            <a class="gk-icon-btn gk-icon-btn-line" href="{{ route('admin.knowledge.file', $document) }}" aria-label="Download file" title="Download file"><i class="bi bi-download"></i></a>
                         @else
-                            —
+                            <span class="text-muted">—</span>
                         @endif
                     </td>
-                    <td class="fit">{{ $document->approval_status }}</td>
+                    <td class="fit"><span class="badge-soft {{ $statusClass }}">{{ $document->approval_status }}</span></td>
                     <td class="fit">
                         @if ($manageableTenantIds->contains($document->tenant_id))
                             <div class="gk-row-actions">
-                                <button class="btn btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#knowledgeFormCanvas" data-knowledge-mode="edit" data-document="{{ json_encode(['id' => $document->id, 'title' => $document->title, 'content' => $document->content, 'tenant' => $document->tenant->name, 'file' => (is_string($document->source_reference) && str_starts_with($document->source_reference, 'knowledge/')) ? route('admin.knowledge.file', $document) : null], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) }}">Edit</button>
+                                <button class="gk-icon-btn gk-icon-btn-line" type="button" data-bs-toggle="offcanvas" data-bs-target="#knowledgeFormCanvas" data-knowledge-mode="edit" aria-label="Edit" title="Edit" data-document="{{ json_encode(['id' => $document->id, 'title' => $document->title, 'content' => $document->content, 'tenant' => $document->tenant->name, 'file' => $hasFile ? route('admin.knowledge.file', $document) : null], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) }}"><i class="bi bi-pencil"></i></button>
                                 @if ($document->approval_status !== 'approved')
-                                    <form method="post" action="{{ route('admin.knowledge.approve', $document) }}">@csrf<button class="btn btn-gk" type="submit">Approve</button></form>
+                                    <form method="post" action="{{ route('admin.knowledge.approve', $document) }}">@csrf<button class="gk-icon-btn gk-icon-btn-line" type="submit" aria-label="Approve" title="Approve"><i class="bi bi-check-lg"></i></button></form>
                                 @endif
                                 <form method="post" action="{{ route('admin.knowledge.destroy', $document) }}" onsubmit="return confirm('Delete this document?')">
                                     @csrf
                                     @method('DELETE')
-                                    <button class="btn btn-outline-danger" type="submit">Delete</button>
+                                    <button class="gk-icon-btn gk-icon-btn-line text-danger" type="submit" aria-label="Delete" title="Delete"><i class="bi bi-trash"></i></button>
                                 </form>
                             </div>
                         @endif
@@ -69,37 +85,51 @@
             </tbody>
         </table>
     </div>
-    <div class="mt-3">{{ $documents->links('pagination::bootstrap-5') }}</div>
+    @if ($documents->hasPages())
+        <div class="mt-2">{{ $documents->links('pagination::bootstrap-5') }}</div>
+    @endif
 </section>
 
 @if ($manageableTenantIds->isNotEmpty())
-    <div class="offcanvas offcanvas-end data-offcanvas" tabindex="-1" id="knowledgeFormCanvas" aria-labelledby="knowledgeFormTitle">
+    <div class="offcanvas offcanvas-end gk-drawer" tabindex="-1" id="knowledgeFormCanvas" aria-labelledby="knowledgeFormTitle">
         <div class="offcanvas-header">
-            <h2 class="offcanvas-title h5 mb-0" id="knowledgeFormTitle">Add a document</h2>
+            <div class="min-w-0">
+                <h2 class="offcanvas-title h5 mb-0" id="knowledgeFormTitle">Add a document</h2>
+                <p class="drawer-note" id="knowledgeScope">{{ $selectedTenant ? 'Saved for '.$selectedTenant->name.'.' : '' }}</p>
+            </div>
             <button class="btn-close" type="button" data-bs-dismiss="offcanvas" aria-label="Close"></button>
         </div>
         <div class="offcanvas-body">
-            @if ($errors->any())
-                <div class="alert alert-danger border mb-0">
-                    @foreach ($errors->all() as $error)
-                        <div>{{ $error }}</div>
-                    @endforeach
-                </div>
-            @endif
-            <p class="form-text mb-0" id="knowledgeScope">{{ $selectedTenant ? 'Saved for '.$selectedTenant->name.'.' : '' }}</p>
-            <form id="knowledgeForm" method="post" action="{{ route('admin.knowledge.store') }}" enctype="multipart/form-data">
+            <form id="knowledgeForm" class="gk-drawer-body" method="post" action="{{ route('admin.knowledge.store') }}" enctype="multipart/form-data">
                 @csrf
                 <input id="knowledgeMethod" type="hidden" name="_method" value="PATCH" @disabled(! $errors->any() || ! old('document_id'))>
                 <input id="knowledgeDocumentId" type="hidden" name="document_id" value="{{ $errors->any() ? old('document_id') : '' }}">
-                <label class="form-label" for="knowledgeTitle">Title</label>
-                <input id="knowledgeTitle" name="title" class="form-control" value="{{ $errors->any() ? old('title') : '' }}" required maxlength="180">
-                <label class="form-label mt-3" for="knowledgeContent">Text</label>
-                <textarea id="knowledgeContent" name="content" class="form-control" rows="8" maxlength="50000">{{ $errors->any() ? old('content') : '' }}</textarea>
-                <label class="form-label mt-3" for="knowledgeFile">File</label>
-                <input id="knowledgeFile" name="file" type="file" class="form-control" accept=".txt,.md,.csv,.json,.doc,.docx,.pdf,text/plain,text/csv,application/json,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
-                <div class="form-text">TXT, MD, CSV, JSON, DOC, DOCX, or PDF. Maximum 10 MB. A text file can fill the document when the text box is empty.</div>
-                <p class="form-text d-none" id="knowledgeCurrentFile"></p>
-                <button class="btn btn-gk mt-3" type="submit">Save document</button>
+                <div class="gk-drawer-main">
+                    @if ($errors->any())
+                        <div class="alert alert-danger border mb-0">
+                            @foreach ($errors->all() as $error)
+                                <div>{{ $error }}</div>
+                            @endforeach
+                        </div>
+                    @endif
+                    <div>
+                        <label class="form-label" for="knowledgeTitle">Title</label>
+                        <input id="knowledgeTitle" name="title" class="form-control" value="{{ $errors->any() ? old('title') : '' }}" required maxlength="180">
+                    </div>
+                    <div class="gk-drawer-grow">
+                        <label class="form-label" for="knowledgeContent">Text</label>
+                        <textarea id="knowledgeContent" name="content" class="form-control" rows="8" maxlength="50000">{{ $errors->any() ? old('content') : '' }}</textarea>
+                    </div>
+                    <div class="file-zone">
+                        <label class="form-label" for="knowledgeFile">File</label>
+                        <input id="knowledgeFile" name="file" type="file" class="form-control" accept=".txt,.md,.csv,.json,.doc,.docx,.pdf,text/plain,text/csv,application/json,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+                        <div class="form-text">TXT, MD, CSV, JSON, DOC, DOCX, or PDF. Maximum 10 MB. A text file fills the document when the text box is empty.</div>
+                        <p class="form-text d-none mb-0" id="knowledgeCurrentFile"></p>
+                    </div>
+                </div>
+                <div class="gk-drawer-foot">
+                    <button class="btn btn-gk w-100" type="submit">Save document</button>
+                </div>
             </form>
         </div>
     </div>

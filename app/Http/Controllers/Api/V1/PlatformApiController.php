@@ -9,10 +9,14 @@ use App\Models\AiApproval;
 use App\Models\AiClarification;
 use App\Models\AiConversation;
 use App\Models\AiEscalation;
+use App\Models\AiKnowledgeDocument;
+use App\Models\AiLogicItem;
 use App\Models\AiOperationRequest;
 use App\Models\Tenant;
 use App\Services\AccessService;
 use App\Services\AudioIntakeService;
+use App\Services\KnowledgeService;
+use App\Services\LogicService;
 use App\Services\Mobile\PlatformPayload;
 use App\Services\Operations\InstructionPipeline;
 use Illuminate\Http\JsonResponse;
@@ -29,6 +33,8 @@ class PlatformApiController extends Controller
         private readonly InstructionPipeline $pipeline,
         private readonly PlatformPayload $payload,
         private readonly AudioIntakeService $audio,
+        private readonly LogicService $logic,
+        private readonly KnowledgeService $knowledge,
     ) {}
 
     public function tenants(Request $request): JsonResponse
@@ -274,6 +280,117 @@ class PlatformApiController extends Controller
         ]);
     }
 
+    public function rules(Request $request): JsonResponse
+    {
+        $tenant = $this->selectedTenant($request);
+        $admin = $this->admin($request);
+        $this->access->assert($admin, $tenant, 'tenants.view');
+        $rules = $this->logic->list($admin, $tenant->id, 'rule')
+            ->through(fn (AiLogicItem $rule): array => $this->payload->rule($rule));
+
+        return $this->ok('Rules loaded.', [
+            'can_manage' => $this->access->allows($admin, $tenant, 'ai.memory.manage'),
+            'rules' => $rules,
+        ]);
+    }
+
+    public function storeRule(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'tenant_id' => ['required', 'uuid'],
+            'title' => ['required', 'string', 'max:180'],
+            'body' => ['required', 'string', 'max:5000'],
+        ]);
+        $rule = $this->logic->store($this->admin($request), $data);
+
+        return $this->ok('Rule saved.', ['rule' => $this->payload->rule($rule)], 201);
+    }
+
+    public function updateRule(Request $request, AiLogicItem $rule): JsonResponse
+    {
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:180'],
+            'body' => ['required', 'string', 'max:5000'],
+        ]);
+        $rule = $this->logic->update($this->admin($request), $rule, $data);
+
+        return $this->ok('Rule updated.', ['rule' => $this->payload->rule($rule)]);
+    }
+
+    public function documents(Request $request): JsonResponse
+    {
+        $tenant = $this->selectedTenant($request);
+        $admin = $this->admin($request);
+        $this->access->assert($admin, $tenant, 'tenants.view');
+        $documents = AiKnowledgeDocument::query()
+            ->with('tenant')
+            ->where('tenant_id', $tenant->id)
+            ->latest()
+            ->paginate(50)
+            ->through(fn (AiKnowledgeDocument $document): array => $this->payload->document($document, false));
+
+        return $this->ok('Documents loaded.', [
+            'can_manage' => $this->access->allows($admin, $tenant, 'ai.memory.manage'),
+            'documents' => $documents,
+        ]);
+    }
+
+    public function showDocument(Request $request, AiKnowledgeDocument $document): JsonResponse
+    {
+        $this->guardDocument($request, $document, 'tenants.view');
+
+        return $this->ok('Document loaded.', ['document' => $this->payload->document($document, true)]);
+    }
+
+    public function storeDocument(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'tenant_id' => ['required', 'uuid'],
+            'title' => ['required', 'string', 'max:180'],
+            'content' => ['required', 'string', 'max:50000'],
+        ]);
+        $tenant = $this->tenant($request, $data['tenant_id']);
+        $this->access->assert($this->admin($request), $tenant, 'ai.memory.manage');
+        $document = $this->knowledge->store($tenant, $data['title'], $data['content'], null);
+
+        return $this->ok('Document stored. It stays out of retrieval until it is approved.', [
+            'document' => $this->payload->document($document, false),
+        ], 201);
+    }
+
+    public function updateDocument(Request $request, AiKnowledgeDocument $document): JsonResponse
+    {
+        $this->guardDocument($request, $document, 'ai.memory.manage');
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:180'],
+            'content' => ['required', 'string', 'max:50000'],
+        ]);
+        $document = $this->knowledge->update($document, $data['title'], $data['content'], null);
+
+        return $this->ok('Document updated. It waits for approval again before retrieval.', [
+            'document' => $this->payload->document($document, true),
+        ]);
+    }
+
+    public function approveDocument(Request $request, AiKnowledgeDocument $document): JsonResponse
+    {
+        $this->guardDocument($request, $document, 'ai.memory.manage');
+        if ($document->approval_status !== 'approved') {
+            $document->approval_status = 'approved';
+            $document->save();
+        }
+
+        return $this->ok('Document approved.', ['document' => $this->payload->document($document, false)]);
+    }
+
+    public function deleteDocument(Request $request, AiKnowledgeDocument $document): JsonResponse
+    {
+        $this->guardDocument($request, $document, 'ai.memory.manage');
+        $this->knowledge->delete($document);
+
+        return $this->ok('Document deleted.', []);
+    }
+
     public function access(Request $request): JsonResponse
     {
         $data = $request->validate(['tenant_id' => ['required', 'uuid']]);
@@ -325,6 +442,19 @@ class PlatformApiController extends Controller
         abort_unless($allowed->contains($selected), 403, 'You do not have access to this business unit.');
 
         return collect([$selected]);
+    }
+
+    private function selectedTenant(Request $request): Tenant
+    {
+        $data = $request->validate(['tenant_id' => ['required', 'uuid']]);
+
+        return $this->tenant($request, $data['tenant_id']);
+    }
+
+    private function guardDocument(Request $request, AiKnowledgeDocument $document, string $permission): void
+    {
+        $document->loadMissing('tenant');
+        $this->access->assert($this->admin($request), $document->tenant, $permission);
     }
 
     private function tenant(Request $request, string $id): Tenant
