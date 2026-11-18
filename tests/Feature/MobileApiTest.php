@@ -7,6 +7,7 @@ use App\Models\AiLogicItem;
 use App\Models\AiOperationRequest;
 use App\Models\SimBooking;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\PlatformTestCase;
 
 class MobileApiTest extends PlatformTestCase
@@ -266,6 +267,43 @@ class MobileApiTest extends PlatformTestCase
             'message' => 'Another business unit',
         ])->assertForbidden();
         $this->assertSame(1, AiLogicItem::query()->count());
+    }
+
+    public function test_document_file_upload_matches_the_admin_form(): void
+    {
+        Storage::fake('local');
+        $tenant = $this->makeTenant('the-inner-cove');
+        $admin = $this->makeAdmin(['username' => 'data-admin', 'email' => 'data@example.test']);
+        $token = $this->tokenFor($admin);
+
+        $this->withToken($token)->post('/api/v1/documents', [
+            'tenant_id' => $tenant->id,
+            'title' => 'Missing text',
+        ])->assertStatus(422);
+
+        $created = $this->withToken($token)->post('/api/v1/documents', [
+            'tenant_id' => $tenant->id,
+            'title' => 'House rules',
+            'content' => '',
+            'file' => UploadedFile::fake()->createWithContent('house-rules.txt', "Quiet hours start at 22:00.\n"),
+        ])->assertCreated()
+            ->assertJsonPath('data.document.has_file', true)
+            ->assertJsonPath('data.document.approval_status', 'pending');
+
+        $documentId = $created->json('data.document.id');
+        $stored = AiKnowledgeDocument::query()->findOrFail($documentId);
+        $this->assertStringContainsString('Quiet hours start at 22:00.', (string) $stored->content);
+        $this->assertStringStartsWith('knowledge/', (string) $stored->source_reference);
+        Storage::disk('local')->assertExists($stored->source_reference);
+
+        $this->withToken($token)->post('/api/v1/documents/'.$documentId, [
+            'title' => 'Updated house rules',
+            'content' => 'Quiet hours start at 21:00.',
+            'file' => UploadedFile::fake()->createWithContent('updated-rules.txt', "Quiet hours start at 21:00.\n"),
+        ])->assertOk()
+            ->assertJsonPath('data.document.title', 'Updated house rules')
+            ->assertJsonPath('data.document.approval_status', 'pending')
+            ->assertJsonPath('data.document.content', 'Quiet hours start at 21:00.');
     }
 
     private function tokenFor(\App\Models\Admin $admin): string
