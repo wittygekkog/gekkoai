@@ -11,11 +11,12 @@ class MobileApiTest extends PlatformTestCase
 {
     public function test_branding_is_public_and_login_rejects_bad_credentials(): void
     {
-        $this->getJson('/api/v1/branding')
+        $branding = $this->getJson('/api/v1/branding')
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.branding.app_name', 'GekkoAi')
             ->assertJsonPath('data.branding.primary_color', '#7C3AED');
+        $this->assertStringContainsString('branding/gekkoai-logo.png', (string) $branding->json('data.branding.logo_url'));
 
         $admin = $this->makeAdmin(['email' => 'ada@example.test']);
         $this->postJson('/api/v1/auth/login', [

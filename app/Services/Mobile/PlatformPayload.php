@@ -34,12 +34,20 @@ final class PlatformPayload
         $logo = Setting::query()->where('setting_slug', 'site-logo')->first();
         $name = getSetting('site-name', 'GekkoAi') ?: 'GekkoAi';
         $color = getSetting('theme-primary', '#7C3AED') ?: '#7C3AED';
-
+        $configured = $this->publicUrl($logo?->setting_value);
+        $defaultPath = public_path('branding/gekkoai-logo.png');
+        $logoUrl = $configured;
+        $version = $logo?->updated_at?->getTimestamp() ?? 0;
+        if ($logoUrl === null && is_file($defaultPath)) {
+            $logoUrl = url('/branding/gekkoai-logo.png');
+            $version = filemtime($defaultPath) ?: 1;
+        }
+        $logoUrl=url(getSetting('site-logo', 'branding/gekkoai-logo.png'));
         return [
             'app_name' => $name,
-            'logo_url' => $this->publicUrl($logo?->setting_value),
+            'logo_url' => $logoUrl,
             'primary_color' => $this->color($color),
-            'logo_version' => $logo?->updated_at?->getTimestamp() ?? 0,
+            'logo_version' => $version,
         ];
     }
 
