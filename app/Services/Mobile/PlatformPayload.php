@@ -105,10 +105,11 @@ final class PlatformPayload
      */
     public function operation(AiOperationRequest $operation, bool $detailed = false): array
     {
-        $operation->loadMissing(['approvals', 'clarifications', 'executions', 'steps']);
+        $operation->loadMissing(['tenant', 'approvals', 'clarifications', 'executions', 'steps']);
         $payload = [
             'id' => $operation->id,
             'tenant_id' => $operation->tenant_id,
+            'tenant_name' => $operation->tenant?->name,
             'conversation_id' => $operation->conversation_id,
             'status' => $operation->status,
             'intent' => $operation->intent,
