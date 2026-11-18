@@ -29,13 +29,23 @@ class LogicPageTest extends PlatformTestCase
 
         $this->actingAs($admin, 'admin')
             ->withSession(['selected_tenant_id' => $tenant->id])
+            ->from('/admin/logic')
             ->post('/admin/logic', [
                 'tenant_id' => $tenant->id,
                 'kind' => 'rule',
                 'title' => 'Deposit before confirmation',
                 'body' => 'A stay is not treated as confirmed until the deposit is recorded.',
             ])
-            ->assertRedirect();
+            ->assertRedirect('/admin/logic');
+
+        $this->actingAs($admin, 'admin')
+            ->withSession(['selected_tenant_id' => $tenant->id])
+            ->get('/admin/logic')
+            ->assertOk()
+            ->assertSee('logicRulesAccordion', false)
+            ->assertSee('Deposit before confirmation')
+            ->assertSee('A stay is not treated as confirmed until the deposit is recorded.')
+            ->assertSee('Add a rule');
 
         $this->assertDatabaseHas('ai_logic_items', [
             'tenant_id' => $tenant->id,

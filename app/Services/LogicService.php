@@ -22,14 +22,19 @@ final class LogicService
         $ids = $this->access->scopedTenantIds($admin, $selectedTenantId);
         $pageName = $kind === 'instruction' ? 'instructions_page' : 'rules_page';
 
-        return AiLogicItem::query()
+        $query = AiLogicItem::query()
             ->with('tenant')
             ->whereIn('tenant_id', $ids)
-            ->where('kind', $kind)
-            ->orderBy('sort_order')
-            ->orderBy('title')
-            ->paginate(150, ['*'], $pageName)
-            ->withQueryString();
+            ->where('kind', $kind);
+
+        // A rule just saved should be the first accordion, still closed.
+        if ($kind === 'rule') {
+            $query->orderByDesc('created_at');
+        } else {
+            $query->orderBy('sort_order')->orderBy('title');
+        }
+
+        return $query->paginate(150, ['*'], $pageName)->withQueryString();
     }
 
     /**
