@@ -22,6 +22,8 @@ use App\Services\RuleChatService;
 use App\Services\Operations\InstructionPipeline;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Read and action endpoints for the Android app.
@@ -377,11 +379,12 @@ class PlatformApiController extends Controller
         $data = $request->validate([
             'tenant_id' => ['required', 'uuid'],
             'title' => ['required', 'string', 'max:180'],
-            'content' => ['required', 'string', 'max:50000'],
+            'content' => ['nullable', 'string', 'max:50000'],
         ]);
+        $file = $this->knowledgeFile($request, true);
         $tenant = $this->tenant($request, $data['tenant_id']);
         $this->access->assert($this->admin($request), $tenant, 'ai.memory.manage');
-        $document = $this->knowledge->store($tenant, $data['title'], $data['content'], null);
+        $document = $this->knowledge->store($tenant, $data['title'], $data['content'] ?? null, $file);
 
         return $this->ok('Document stored. It stays out of retrieval until it is approved.', [
             'document' => $this->payload->document($document, false),
@@ -393,9 +396,10 @@ class PlatformApiController extends Controller
         $this->guardDocument($request, $document, 'ai.memory.manage');
         $data = $request->validate([
             'title' => ['required', 'string', 'max:180'],
-            'content' => ['required', 'string', 'max:50000'],
+            'content' => ['nullable', 'string', 'max:50000'],
         ]);
-        $document = $this->knowledge->update($document, $data['title'], $data['content'], null);
+        $file = $this->knowledgeFile($request, false);
+        $document = $this->knowledge->update($document, $data['title'], $data['content'] ?? null, $file);
 
         return $this->ok('Document updated. It waits for approval again before retrieval.', [
             'document' => $this->payload->document($document, true),
@@ -472,6 +476,43 @@ class PlatformApiController extends Controller
         abort_unless($allowed->contains($selected), 403, 'You do not have access to this business unit.');
 
         return collect([$selected]);
+    }
+
+    private function knowledgeFile(Request $request, bool $creating): ?UploadedFile
+    {
+        $file = $request->file('file');
+        if ($creating && ! $request->filled('content') && ! $file instanceof UploadedFile) {
+            throw ValidationException::withMessages([
+                'content' => 'Add the text or upload a file.',
+            ]);
+        }
+        if (! $file instanceof UploadedFile) {
+            return null;
+        }
+
+        $allowed = [
+            'txt' => ['text/plain'],
+            'md' => ['text/plain', 'text/markdown'],
+            'csv' => ['text/plain', 'text/csv', 'application/csv', 'application/vnd.ms-excel'],
+            'json' => ['application/json', 'text/plain', 'text/json'],
+            'pdf' => ['application/pdf'],
+            'doc' => ['application/msword'],
+            'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/zip'],
+        ];
+        $extension = strtolower($file->getClientOriginalExtension());
+        $mime = (string) $file->getMimeType();
+        if (! isset($allowed[$extension]) || ! in_array($mime, $allowed[$extension], true)) {
+            throw ValidationException::withMessages([
+                'file' => 'Upload a TXT, MD, CSV, JSON, DOC, DOCX, or PDF file.',
+            ]);
+        }
+        if ($file->getSize() > 10 * 1024 * 1024) {
+            throw ValidationException::withMessages([
+                'file' => 'The file must be 10 MB or smaller.',
+            ]);
+        }
+
+        return $file;
     }
 
     private function selectedTenant(Request $request): Tenant

@@ -45,7 +45,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/documents', [PlatformApiController::class, 'documents'])->name('api.v1.documents');
         Route::post('/documents', [PlatformApiController::class, 'storeDocument'])->name('api.v1.documents.store');
         Route::get('/documents/{document}', [PlatformApiController::class, 'showDocument'])->name('api.v1.documents.show');
-        Route::patch('/documents/{document}', [PlatformApiController::class, 'updateDocument'])->name('api.v1.documents.update');
+        Route::match(['post', 'patch'], '/documents/{document}', [PlatformApiController::class, 'updateDocument'])->name('api.v1.documents.update');
         Route::post('/documents/{document}/approve', [PlatformApiController::class, 'approveDocument'])->name('api.v1.documents.approve');
         Route::delete('/documents/{document}', [PlatformApiController::class, 'deleteDocument'])->name('api.v1.documents.delete');
         Route::get('/flags', [PlatformApiController::class, 'flags'])->name('api.v1.flags');
