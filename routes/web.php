@@ -44,7 +44,9 @@ Route::middleware(['auth:admin', 'admin.active', 'password.changed'])->group(fun
 
     Route::get('/admin/conversations', [WorkspaceController::class, 'conversations'])->name('admin.conversations.index');
     Route::get('/admin/logic', [LogicController::class, 'index'])->name('admin.logic.index');
+    Route::post('/admin/logic/chat', [LogicController::class, 'chat'])->middleware('throttle:ai')->name('admin.logic.chat');
     Route::post('/admin/logic', [LogicController::class, 'store'])->name('admin.logic.store');
+    Route::patch('/admin/logic/{rule}', [LogicController::class, 'update'])->name('admin.logic.update');
     Route::get('/admin/operations', [ReviewController::class, 'operations'])->name('admin.operations.index');
     Route::get('/admin/operations/{operation}', [ReviewController::class, 'showOperation'])->name('admin.operations.show');
     Route::post('/admin/operations/{operation}/reconcile', [ReviewController::class, 'reconcile'])->name('admin.operations.reconcile');
@@ -70,6 +72,9 @@ Route::middleware(['auth:admin', 'admin.active', 'password.changed'])->group(fun
     Route::post('/admin/models', [SystemController::class, 'storeModel'])->name('admin.models.store');
     Route::get('/admin/knowledge', [KnowledgeController::class, 'index'])->name('admin.knowledge.index');
     Route::post('/admin/knowledge', [KnowledgeController::class, 'store'])->name('admin.knowledge.store');
+    Route::patch('/admin/knowledge/{document}', [KnowledgeController::class, 'update'])->name('admin.knowledge.update');
+    Route::delete('/admin/knowledge/{document}', [KnowledgeController::class, 'destroy'])->name('admin.knowledge.destroy');
+    Route::get('/admin/knowledge/{document}/file', [KnowledgeController::class, 'file'])->name('admin.knowledge.file');
     Route::post('/admin/knowledge/{document}/approve', [KnowledgeController::class, 'approve'])->name('admin.knowledge.approve');
     Route::get('/admin/learning', [KnowledgeController::class, 'learning'])->name('admin.learning.index');
     Route::post('/admin/feedback', [KnowledgeController::class, 'feedback'])->name('admin.feedback.store');

@@ -3,18 +3,21 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\KnowledgeDocumentRequest;
 use App\Models\AiEvaluationRun;
 use App\Models\AiFeedback;
-use App\Models\AiKnowledgeChunk;
 use App\Models\AiKnowledgeDocument;
 use App\Models\AiLearningExample;
-use App\Models\AiModelVersion;
+use App\Models\Tenant;
 use App\Services\AccessService;
 use App\Services\Ai\InstructionAnalyzer;
 use App\Services\KnowledgeService;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class KnowledgeController extends Controller
 {
@@ -26,32 +29,57 @@ class KnowledgeController extends Controller
 
     public function index(Request $request): View
     {
-        $ids = $this->access->scopedTenantIds($request->user('admin'), $request->session()->get('selected_tenant_id'));
+        $admin = $request->user('admin');
+        $selected = $request->session()->get('selected_tenant_id');
+        $ids = $this->access->scopedTenantIds($admin, $selected);
         $documents = AiKnowledgeDocument::query()->with('tenant')->whereIn('tenant_id', $ids)->latest()->paginate(150);
+        $tenants = $this->access->tenantsFor($admin);
+        $selectedTenant = $this->access->isSpecificTenant($selected) ? $tenants->firstWhere('id', $selected) : null;
 
-        return view('admin.knowledge.index', compact('documents'));
+        return view('admin.knowledge.index', [
+            'documents' => $documents,
+            'selectedTenant' => $selectedTenant,
+            'canManage' => $selectedTenant !== null && $this->access->allows($admin, $selectedTenant, 'ai.memory.manage'),
+            'manageableTenantIds' => $tenants
+                ->filter(fn ($tenant): bool => $this->access->allows($admin, $tenant, 'ai.memory.manage'))
+                ->pluck('id'),
+        ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(KnowledgeDocumentRequest $request): RedirectResponse
     {
-        $data = $request->validate([
-            'tenant_id' => ['required', 'uuid'],
-            'title' => ['required', 'string', 'max:180'],
-            'content' => ['required', 'string', 'max:50000'],
-        ]);
-        $tenant = $this->access->tenantsFor($request->user('admin'))->firstWhere('id', $data['tenant_id']);
-        abort_if($tenant === null, 403);
+        $tenant = $this->selectedTenant($request);
         $this->access->assert($request->user('admin'), $tenant, 'ai.memory.manage');
-        $document = new AiKnowledgeDocument();
-        $document->tenant_id = $tenant->id;
-        $document->title = $data['title'];
-        $document->source_type = 'upload';
-        $document->content = $data['content'];
-        $document->approval_status = 'pending';
-        $document->save();
-        $this->chunk($document);
+        $data = $request->validated();
+        $this->knowledge->store($tenant, $data['title'], $data['content'] ?? null, $request->file('file'));
 
-        return back()->with('success', 'Document stored. It cannot influence operations until it is approved.');
+        return back()->with('success', 'Document stored for '.$tenant->name.'. It stays out of retrieval until it is approved.');
+    }
+
+    public function update(KnowledgeDocumentRequest $request, AiKnowledgeDocument $document): RedirectResponse
+    {
+        $this->guardDocument($request, $document);
+        $data = $request->validated();
+        $this->knowledge->update($document, $data['title'], $data['content'] ?? null, $request->file('file'));
+
+        return back()->with('success', 'Document updated. It waits for approval again before retrieval.');
+    }
+
+    public function destroy(Request $request, AiKnowledgeDocument $document): RedirectResponse
+    {
+        $this->guardDocument($request, $document);
+        $this->knowledge->delete($document);
+
+        return back()->with('success', 'Document deleted.');
+    }
+
+    public function file(Request $request, AiKnowledgeDocument $document): BinaryFileResponse
+    {
+        $ids = $this->access->scopedTenantIds($request->user('admin'), $request->session()->get('selected_tenant_id'));
+        abort_unless($ids->contains($document->tenant_id), 403);
+        $path = $this->knowledge->storedPath($document);
+
+        return response()->download(Storage::disk('local')->path($path), basename($path));
     }
 
     public function approve(Request $request, AiKnowledgeDocument $document): RedirectResponse
@@ -151,19 +179,28 @@ class KnowledgeController extends Controller
         return back()->with('success', 'Evaluation recorded. Automatic writes stay off because the labeled set is below the calibration minimum.');
     }
 
-    private function chunk(AiKnowledgeDocument $document): void
+    /**
+     * The open workspace SBU. A posted tenant id cannot move the document.
+     */
+    private function selectedTenant(Request $request): Tenant
     {
-        $parts = str_split($document->content, 800);
-        foreach ($parts as $index => $part) {
-            $chunk = new AiKnowledgeChunk();
-            $chunk->tenant_id = $document->tenant_id;
-            $chunk->document_id = $document->id;
-            $chunk->chunk_index = $index;
-            $chunk->content = $part;
-            $chunk->embedding = $this->knowledge->embed($part);
-            $chunk->embedding_reference = 'hashing-v1';
-            $chunk->created_at = now();
-            $chunk->save();
+        $selected = $request->session()->get('selected_tenant_id');
+        $tenant = $this->access->isSpecificTenant($selected)
+            ? $this->access->tenantsFor($request->user('admin'))->firstWhere('id', $selected)
+            : null;
+        if (! $tenant instanceof Tenant) {
+            throw new HttpResponseException(redirect()->back()->with('error', 'Select an SBU before adding data.'));
         }
+
+        return $tenant;
+    }
+
+    private function guardDocument(Request $request, AiKnowledgeDocument $document): void
+    {
+        $selected = $request->session()->get('selected_tenant_id');
+        if ($this->access->isSpecificTenant($selected) && $document->tenant_id !== $selected) {
+            abort(404);
+        }
+        $this->access->assert($request->user('admin'), $document->tenant, 'ai.memory.manage');
     }
 }

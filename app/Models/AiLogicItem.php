@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * One rule or one worked instruction for a business unit.
+ * One standing rule for a business unit.
  */
 class AiLogicItem extends Model
 {
