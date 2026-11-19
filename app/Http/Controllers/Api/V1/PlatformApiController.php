@@ -18,6 +18,8 @@ use App\Services\AudioIntakeService;
 use App\Services\KnowledgeService;
 use App\Services\LogicService;
 use App\Services\Mobile\PlatformPayload;
+use App\Services\ObjectiveChatService;
+use App\Services\ObjectiveService;
 use App\Services\RuleChatService;
 use App\Services\Operations\InstructionPipeline;
 use Illuminate\Http\JsonResponse;
@@ -39,6 +41,8 @@ class PlatformApiController extends Controller
         private readonly LogicService $logic,
         private readonly KnowledgeService $knowledge,
         private readonly RuleChatService $rules,
+        private readonly ObjectiveService $objectives,
+        private readonly ObjectiveChatService $objectiveChat,
     ) {}
 
     public function tenants(Request $request): JsonResponse
@@ -347,6 +351,73 @@ class PlatformApiController extends Controller
         $rule = $this->logic->update($this->admin($request), $rule, $data);
 
         return $this->ok('Rule updated.', ['rule' => $this->payload->rule($rule)]);
+    }
+
+    public function objectives(Request $request): JsonResponse
+    {
+        $tenant = $this->selectedTenant($request);
+        $admin = $this->admin($request);
+        $this->access->assert($admin, $tenant, 'tenants.view');
+        $objectives = $this->objectives->list($admin, $tenant->id)
+            ->through(fn (AiLogicItem $objective): array => $this->payload->rule($objective));
+
+        return $this->ok('Objectives loaded.', [
+            'can_manage' => $this->access->allows($admin, $tenant, 'ai.memory.manage'),
+            'objectives' => $objectives,
+        ]);
+    }
+
+    public function chatObjective(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'tenant_id' => ['required', 'uuid'],
+            'objective_id' => ['nullable', 'uuid'],
+            'message' => ['required', 'string', 'max:4000'],
+            'title' => ['nullable', 'string', 'max:180'],
+            'body' => ['nullable', 'string', 'max:5000'],
+        ]);
+        $tenant = $this->tenant($request, $data['tenant_id']);
+        $this->access->assert($this->admin($request), $tenant, 'ai.memory.manage');
+
+        $title = $data['title'] ?? null;
+        $body = $data['body'] ?? null;
+        if (! empty($data['objective_id'])) {
+            $objective = AiLogicItem::query()
+                ->where('tenant_id', $tenant->id)
+                ->where('kind', 'objective')
+                ->findOrFail($data['objective_id']);
+            $title = ($title === null || $title === '') ? $objective->title : $title;
+            $body = ($body === null || $body === '') ? $objective->body : $body;
+        }
+
+        $draft = $this->objectiveChat->draft($data['message'], is_string($title) ? $title : null, is_string($body) ? $body : null);
+
+        return $this->ok($draft['reply'], $draft);
+    }
+
+    public function storeObjective(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'tenant_id' => ['required', 'uuid'],
+            'title' => ['required', 'string', 'max:180'],
+            'body' => ['required', 'string', 'max:5000'],
+        ]);
+        $objective = $this->objectives->store($this->admin($request), $data);
+
+        return $this->ok('Objective saved. It does not override Rules or grant a tool.', [
+            'objective' => $this->payload->rule($objective),
+        ], 201);
+    }
+
+    public function updateObjective(Request $request, AiLogicItem $objective): JsonResponse
+    {
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:180'],
+            'body' => ['required', 'string', 'max:5000'],
+        ]);
+        $objective = $this->objectives->update($this->admin($request), $objective, $data);
+
+        return $this->ok('Objective updated.', ['objective' => $this->payload->rule($objective)]);
     }
 
     public function documents(Request $request): JsonResponse

@@ -42,6 +42,10 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/rules/chat', [PlatformApiController::class, 'chatRule'])->name('api.v1.rules.chat');
         Route::post('/rules', [PlatformApiController::class, 'storeRule'])->name('api.v1.rules.store');
         Route::patch('/rules/{rule}', [PlatformApiController::class, 'updateRule'])->name('api.v1.rules.update');
+        Route::get('/objectives', [PlatformApiController::class, 'objectives'])->name('api.v1.objectives');
+        Route::post('/objectives/chat', [PlatformApiController::class, 'chatObjective'])->name('api.v1.objectives.chat');
+        Route::post('/objectives', [PlatformApiController::class, 'storeObjective'])->name('api.v1.objectives.store');
+        Route::patch('/objectives/{objective}', [PlatformApiController::class, 'updateObjective'])->name('api.v1.objectives.update');
         Route::get('/documents', [PlatformApiController::class, 'documents'])->name('api.v1.documents');
         Route::post('/documents', [PlatformApiController::class, 'storeDocument'])->name('api.v1.documents.store');
         Route::get('/documents/{document}', [PlatformApiController::class, 'showDocument'])->name('api.v1.documents.show');

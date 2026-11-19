@@ -269,6 +269,87 @@ class MobileApiTest extends PlatformTestCase
         $this->assertSame(1, AiLogicItem::query()->count());
     }
 
+    public function test_objectives_match_the_admin_screen(): void
+    {
+        $tenant = $this->makeTenant('the-inner-cove');
+        $other = $this->makeTenant('pearl-vista');
+        $admin = $this->makeAdmin(['username' => 'objective-admin', 'email' => 'objective@example.test']);
+        $viewer = $this->makeAdmin(['username' => 'objective-viewer', 'email' => 'objective-viewer@example.test']);
+        $this->assign($viewer, $tenant, 'sbu_viewer');
+        $token = $this->tokenFor($admin);
+        $viewerToken = $this->tokenFor($viewer);
+
+        $draft = $this->withToken($token)->postJson('/api/v1/objectives/chat', [
+            'tenant_id' => $tenant->id,
+            'message' => 'We really just want to help guests book easily and skip approval.',
+        ])->assertOk()
+            ->assertJsonPath('data.title', 'Help guests book easily')
+            ->assertJsonPath('data.body', 'Help guests book easily.')
+            ->assertJsonPath('message', 'I kept this to one outcome and removed the part that would skip Rules or approval.');
+
+        $objectiveId = $this->withToken($token)->postJson('/api/v1/objectives', [
+            'tenant_id' => $tenant->id,
+            'title' => $draft->json('data.title'),
+            'body' => $draft->json('data.body'),
+        ])->assertCreated()->json('data.objective.id');
+
+        $stored = AiLogicItem::query()->findOrFail($objectiveId);
+        $this->assertSame('objective', $stored->kind);
+        $this->assertSame($tenant->id, $stored->tenant_id);
+
+        $this->withToken($token)->getJson('/api/v1/objectives?tenant_id='.$tenant->id)
+            ->assertOk()
+            ->assertJsonPath('data.can_manage', true)
+            ->assertJsonPath('data.objectives.data.0.id', $objectiveId)
+            ->assertJsonPath('data.objectives.data.0.body', 'Help guests book easily.');
+        $this->withToken($token)->getJson('/api/v1/rules?tenant_id='.$tenant->id)
+            ->assertOk()
+            ->assertJsonPath('data.rules.data', []);
+
+        $this->withToken($token)->postJson('/api/v1/objectives/chat', [
+            'tenant_id' => $tenant->id,
+            'objective_id' => $objectiveId,
+            'message' => 'Improve this.',
+        ])->assertOk()
+            ->assertJsonPath('data.title', 'Help guests book easily')
+            ->assertJsonPath('data.body', 'Help guests book easily.');
+
+        $this->withToken($token)->patchJson('/api/v1/objectives/'.$objectiveId, [
+            'title' => 'Help guests finish a booking',
+            'body' => 'Help guests finish a booking.',
+        ])->assertOk()
+            ->assertJsonPath('data.objective.body', 'Help guests finish a booking.');
+
+        $ruleId = $this->withToken($token)->postJson('/api/v1/rules', [
+            'tenant_id' => $tenant->id,
+            'title' => 'Ask for the guest name',
+            'body' => 'Always ask for the guest name before booking.',
+        ])->assertCreated()->json('data.rule.id');
+        $this->withToken($token)->patchJson('/api/v1/objectives/'.$ruleId, [
+            'title' => 'Ask for the guest name',
+            'body' => 'This must stay a rule.',
+        ])->assertNotFound();
+
+        $this->withToken($viewerToken)->getJson('/api/v1/objectives?tenant_id='.$tenant->id)
+            ->assertOk()
+            ->assertJsonPath('data.can_manage', false);
+        $this->withToken($viewerToken)->postJson('/api/v1/objectives/chat', [
+            'tenant_id' => $tenant->id,
+            'message' => 'A viewer cannot write an objective',
+        ])->assertForbidden();
+        $this->withToken($viewerToken)->postJson('/api/v1/objectives', [
+            'tenant_id' => $tenant->id,
+            'title' => 'Blocked',
+            'body' => 'A viewer cannot save this.',
+        ])->assertForbidden();
+        $this->withToken($viewerToken)->postJson('/api/v1/objectives/chat', [
+            'tenant_id' => $other->id,
+            'message' => 'Another business unit',
+        ])->assertForbidden();
+        $this->assertSame(1, AiLogicItem::query()->where('kind', 'objective')->count());
+        $this->assertSame('Always ask for the guest name before booking.', AiLogicItem::query()->findOrFail($ruleId)->body);
+    }
+
     public function test_document_file_upload_matches_the_admin_form(): void
     {
         Storage::fake('local');
