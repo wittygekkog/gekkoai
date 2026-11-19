@@ -32,13 +32,29 @@ class KnowledgeController extends Controller
         $admin = $request->user('admin');
         $selected = $request->session()->get('selected_tenant_id');
         $ids = $this->access->scopedTenantIds($admin, $selected);
-        $documents = AiKnowledgeDocument::query()->with('tenant')->whereIn('tenant_id', $ids)->latest()->paginate(150);
+        $q = trim((string) $request->query('q', ''));
+        $status = (string) $request->query('status', '');
+        if (! in_array($status, ['pending', 'approved', 'rejected'], true)) {
+            $status = '';
+        }
+        $documents = AiKnowledgeDocument::query()
+            ->with('tenant')
+            ->whereIn('tenant_id', $ids)
+            ->when($q !== '', function ($query) use ($q): void {
+                $query->where('title', 'like', '%'.addcslashes($q, '%_\\').'%');
+            })
+            ->when($status !== '', fn ($query) => $query->where('approval_status', $status))
+            ->latest()
+            ->paginate(150)
+            ->withQueryString();
         $tenants = $this->access->tenantsFor($admin);
         $selectedTenant = $this->access->isSpecificTenant($selected) ? $tenants->firstWhere('id', $selected) : null;
 
         return view('admin.knowledge.index', [
             'documents' => $documents,
             'selectedTenant' => $selectedTenant,
+            'q' => $q,
+            'status' => $status,
             'canManage' => $selectedTenant !== null && $this->access->allows($admin, $selectedTenant, 'ai.memory.manage'),
             'manageableTenantIds' => $tenants
                 ->filter(fn ($tenant): bool => $this->access->allows($admin, $tenant, 'ai.memory.manage'))

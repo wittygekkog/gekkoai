@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DeployController;
 use App\Http\Controllers\Admin\KnowledgeController;
 use App\Http\Controllers\Admin\LogicController;
+use App\Http\Controllers\Admin\ObjectiveController;
 use App\Http\Controllers\Admin\LoginController;
 use App\Http\Controllers\Admin\PasswordController;
 use App\Http\Controllers\Admin\ReviewController;
@@ -43,6 +44,11 @@ Route::middleware(['auth:admin', 'admin.active', 'password.changed'])->group(fun
     Route::post('/admin/workspace/{conversation}/transcript', [WorkspaceController::class, 'confirmTranscript'])->name('admin.workspace.transcript');
 
     Route::get('/admin/conversations', [WorkspaceController::class, 'conversations'])->name('admin.conversations.index');
+    Route::get('/admin/objective', [ObjectiveController::class, 'index'])->name('admin.objective.index');
+    Route::post('/admin/objective/chat', [ObjectiveController::class, 'chat'])->middleware('throttle:ai')->name('admin.objective.chat');
+    Route::post('/admin/objective', [ObjectiveController::class, 'store'])->name('admin.objective.store');
+    Route::patch('/admin/objective/{objective}', [ObjectiveController::class, 'update'])->name('admin.objective.update');
+
     Route::get('/admin/logic', [LogicController::class, 'index'])->name('admin.logic.index');
     Route::post('/admin/logic/chat', [LogicController::class, 'chat'])->middleware('throttle:ai')->name('admin.logic.chat');
     Route::post('/admin/logic', [LogicController::class, 'store'])->name('admin.logic.store');

@@ -19,74 +19,94 @@
     @endif
 </div>
 
+<form class="search-form gk-list-toolbar" method="get">
+    <input class="form-control" name="q" value="{{ $q }}" placeholder="Search title" aria-label="Search title" maxlength="180">
+    <select class="form-select" name="status" aria-label="Status">
+        <option value="">All statuses</option>
+        @foreach (['pending' => 'Pending', 'approved' => 'Approved', 'rejected' => 'Rejected'] as $value => $label)
+            <option value="{{ $value }}" @selected($status === $value)>{{ $label }}</option>
+        @endforeach
+    </select>
+    <button class="btn btn-outline-secondary" type="submit" aria-label="Search"><i class="bi bi-search"></i></button>
+    <span class="gk-list-count">{{ $documents->total() }}</span>
+</form>
+
 <section class="gk-card gk-list-card">
     <div class="table-responsive">
-        <table class="table table-striped table-bordered align-middle gk-table mb-0">
+        <table class="table table-striped table-bordered align-middle gk-table gk-doc-table mb-0">
             <thead>
                 <tr>
-                    <th class="gk-main">Title</th>
+                    <th class="gk-col-grow">Title</th>
                     @unless ($selectedTenant)
-                        <th>SBU</th>
+                        <th class="gk-col-sbu">SBU</th>
                     @endunless
-                    <th class="fit">File</th>
+                    <th class="fit">Updated</th>
                     <th class="fit">Status</th>
-                    <th class="fit"></th>
+                    <th class="fit"><span class="visually-hidden">Actions</span></th>
                 </tr>
             </thead>
             <tbody>
             @forelse ($documents as $document)
                 @php
                     $hasFile = is_string($document->source_reference) && str_starts_with($document->source_reference, 'knowledge/');
-                    $excerpt = \Illuminate\Support\Str::limit(trim((string) preg_replace('/\s+/', ' ', (string) $document->content)), 140);
+                    $excerpt = \Illuminate\Support\Str::limit(trim((string) preg_replace('/\s+/', ' ', (string) $document->content)), 160);
                     $statusClass = match ($document->approval_status) {
                         'approved' => 'badge-ok',
                         'pending' => 'badge-wait',
                         'rejected' => 'badge-bad',
                         default => 'badge-info',
                     };
+                    $kind = match ($document->source_type) {
+                        'file' => 'File',
+                        'text' => 'Text',
+                        'seed' => 'Seed',
+                        default => ucfirst((string) $document->source_type),
+                    };
                 @endphp
                 <tr>
-                    <td class="gk-main">
-                        <div class="gk-doc-title">{{ $document->title }}</div>
+                    <td class="gk-col-grow">
+                        <div class="gk-doc-title" title="{{ $document->title }}">{{ $document->title }}</div>
                         @if ($excerpt !== '')
-                            <div class="gk-doc-excerpt">{{ $excerpt }}</div>
+                            <div class="gk-doc-excerpt" title="{{ $excerpt }}">{{ $excerpt }}</div>
                         @endif
                     </td>
                     @unless ($selectedTenant)
-                        <td>{{ $document->tenant->name }}</td>
+                        <td class="gk-col-sbu" title="{{ $document->tenant->name }}"><span>{{ $document->tenant->name }}</span></td>
                     @endunless
-                    <td class="fit">
-                        @if ($hasFile)
-                            <a class="gk-icon-btn gk-icon-btn-line" href="{{ route('admin.knowledge.file', $document) }}" aria-label="Download file" title="Download file"><i class="bi bi-download"></i></a>
-                        @else
-                            <span class="text-muted">—</span>
-                        @endif
+                    <td class="fit gk-col-when" title="{{ $document->updated_at?->toDayDateTimeString() }}">
+                        <div>{{ $document->updated_at?->format('M j, Y') }}</div>
+                        <div class="gk-doc-kind">{{ $kind }}</div>
                     </td>
-                    <td class="fit"><span class="badge-soft {{ $statusClass }}">{{ $document->approval_status }}</span></td>
-                    <td class="fit">
-                        @if ($manageableTenantIds->contains($document->tenant_id))
+                    <td class="fit gk-col-status"><span class="badge-soft {{ $statusClass }}">{{ ucfirst($document->approval_status) }}</span></td>
+                    <td class="fit gk-col-actions">
+                        @if ($manageableTenantIds->contains($document->tenant_id) || $hasFile)
                             <div class="gk-row-actions">
-                                <button class="gk-icon-btn gk-icon-btn-line" type="button" data-bs-toggle="offcanvas" data-bs-target="#knowledgeFormCanvas" data-knowledge-mode="edit" aria-label="Edit" title="Edit" data-document="{{ json_encode(['id' => $document->id, 'title' => $document->title, 'content' => $document->content, 'tenant' => $document->tenant->name, 'file' => $hasFile ? route('admin.knowledge.file', $document) : null], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) }}"><i class="bi bi-pencil"></i></button>
-                                @if ($document->approval_status !== 'approved')
-                                    <form method="post" action="{{ route('admin.knowledge.approve', $document) }}">@csrf<button class="gk-icon-btn gk-icon-btn-line" type="submit" aria-label="Approve" title="Approve"><i class="bi bi-check-lg"></i></button></form>
+                                @if ($hasFile)
+                                    <a class="gk-icon-btn gk-icon-btn-line" href="{{ route('admin.knowledge.file', $document) }}" aria-label="Download file" title="Download file"><i class="bi bi-download"></i></a>
                                 @endif
-                                <form method="post" action="{{ route('admin.knowledge.destroy', $document) }}" onsubmit="return confirm('Delete this document?')">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button class="gk-icon-btn gk-icon-btn-line text-danger" type="submit" aria-label="Delete" title="Delete"><i class="bi bi-trash"></i></button>
-                                </form>
+                                @if ($manageableTenantIds->contains($document->tenant_id))
+                                    <button class="gk-icon-btn gk-icon-btn-line" type="button" data-bs-toggle="offcanvas" data-bs-target="#knowledgeFormCanvas" data-knowledge-mode="edit" aria-label="Edit" title="Edit" data-document="{{ json_encode(['id' => $document->id, 'title' => $document->title, 'content' => $document->content, 'tenant' => $document->tenant->name, 'file' => $hasFile ? route('admin.knowledge.file', $document) : null], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) }}"><i class="bi bi-pencil"></i></button>
+                                    @if ($document->approval_status !== 'approved')
+                                        <form method="post" action="{{ route('admin.knowledge.approve', $document) }}">@csrf<button class="gk-icon-btn gk-icon-btn-line" type="submit" aria-label="Approve" title="Approve"><i class="bi bi-check-lg"></i></button></form>
+                                    @endif
+                                    <form method="post" action="{{ route('admin.knowledge.destroy', $document) }}" onsubmit="return confirm('Delete this document?')">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button class="gk-icon-btn gk-icon-btn-line text-danger" type="submit" aria-label="Delete" title="Delete"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                @endif
                             </div>
                         @endif
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="{{ $columns }}">No documents yet.</td></tr>
+                <tr><td colspan="{{ $columns }}">No documents match this list.</td></tr>
             @endforelse
             </tbody>
         </table>
     </div>
     @if ($documents->hasPages())
-        <div class="mt-2">{{ $documents->links('pagination::bootstrap-5') }}</div>
+        <div class="gk-list-pages">{{ $documents->links('pagination::bootstrap-5') }}</div>
     @endif
 </section>
 

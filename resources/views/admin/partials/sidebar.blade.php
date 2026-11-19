@@ -52,6 +52,9 @@
             <a href="{{ route('admin.workspace.index') }}" class="{{ $linkActive('admin.workspace.*') }}" @if(request()->routeIs('admin.workspace.*')) aria-current="page" @endif>
                 <i class="bi bi-stars"></i> AI Workspace
             </a>
+            <a href="{{ route('admin.objective.index') }}" class="{{ $linkActive('admin.objective.*') }}" @if(request()->routeIs('admin.objective.*')) aria-current="page" @endif>
+                <i class="bi bi-bullseye"></i> Objective
+            </a>
             <a href="{{ route('admin.logic.index') }}" class="{{ $linkActive('admin.logic.*') }}" @if(request()->routeIs('admin.logic.*')) aria-current="page" @endif>
                 <i class="bi bi-diagram-3"></i> Logic
             </a>
