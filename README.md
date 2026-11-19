@@ -96,6 +96,6 @@ Tokens are returned once. `admin_api_tokens` stores SHA-256 hashes, device name,
 
 Accounts with `must_change_password` cannot call the mobile API until the password is changed in the web admin. The bootstrap administrators are created in that state. Login failures for unknown, inactive, and wrong-password accounts share one message.
 
-`GET` conversation and operation routes only read state. Creating a booking, approval, or rejection requires the matching `POST`. Audio upload stores the file and an `AiTranscription` row. With no speech provider configured, `transcript` is null and `provider_configured` is false. The API does not invent a transcript. Supported language codes are `en` and `tl` (`fil` is stored as `tl`).
+`GET` conversation and operation routes only read state. Creating a booking, approval, or rejection requires the matching `POST`. Audio upload stores the file and an `AiTranscription` row. `SPEECH_PROVIDER=openai` with `OPENAI_API_KEY`, or `SPEECH_PROVIDER=huggingface` with `HUGGINGFACE_TOKEN`, fills `transcript` from that speech model. With no key, `transcript` is null and `provider_configured` is false. The API does not invent a transcript. The words are not an instruction until they are confirmed. Supported language codes are `en` and `tl` (`fil` is stored as `tl`).
 
 Connector secrets, base URLs, and key ids are omitted from tenant and access payloads. Logic payloads include intent, parameters, confidence, calibration, missing fields, and eligibility. They do not include chain-of-thought.

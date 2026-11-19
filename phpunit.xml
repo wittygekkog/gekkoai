@@ -32,7 +32,9 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
-        <env name="GEKKO_ANALYZER" value="deterministic"/>
+        <env name="SPEECH_PROVIDER" value="none"/>
+        <env name="OPENAI_API_KEY" value=""/>
+        <env name="HUGGINGFACE_TOKEN" value=""/>
         <env name="GEKKO_ALLOW_LIVE_CONNECTORS" value="false"/>
         <env name="SBU_SIMULATION_KEY_ID" value="sim-inner-cove"/>
         <env name="SBU_SIMULATION_SECRET" value="test-connector-secret"/>

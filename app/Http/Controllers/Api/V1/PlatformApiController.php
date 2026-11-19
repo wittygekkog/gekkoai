@@ -76,8 +76,8 @@ class PlatformApiController extends Controller
         $conversation->user_id = $this->admin($request)->id;
         $conversation->title = 'New conversation';
         $conversation->status = 'open';
-        $conversation->model_provider = config('gekko.analyzer') === 'http' ? 'http' : 'deterministic';
-        $conversation->model_name = config('gekko.analyzer') === 'http' ? 'configured-provider' : 'Gekko baseline parser';
+        $conversation->model_provider = 'deterministic';
+        $conversation->model_name = 'Gekko baseline parser';
         $conversation->save();
 
         return $this->ok('Conversation created.', ['conversation' => $this->payload->conversation($conversation)], 201);

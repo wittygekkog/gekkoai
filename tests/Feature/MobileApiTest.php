@@ -7,6 +7,7 @@ use App\Models\AiLogicItem;
 use App\Models\AiOperationRequest;
 use App\Models\SimBooking;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Tests\PlatformTestCase;
 
@@ -121,6 +122,40 @@ class MobileApiTest extends PlatformTestCase
             ->assertJsonPath('data.transcription.provider_configured', false)
             ->assertJsonPath('data.transcription.language', 'tl')
             ->assertJsonPath('data.transcription.transcript', null);
+
+        $this->assertSame(0, AiOperationRequest::query()->count());
+        $this->assertSame(0, SimBooking::query()->count());
+    }
+
+    public function test_configured_speech_fills_the_transcript_without_creating_a_booking(): void
+    {
+        config([
+            'gekko.speech_provider' => 'openai',
+            'services.openai.key' => 'test-key',
+            'services.openai.speech_model' => 'whisper-1',
+            'services.openai.base_url' => 'https://api.openai.com/v1',
+        ]);
+        Http::fake([
+            'api.openai.com/*' => Http::response(['text' => 'Check availability for two guests.'], 200),
+        ]);
+
+        $admin = $this->makeAdmin();
+        $tenant = $this->makeTenant('the-inner-cove', true);
+        $token = $this->tokenFor($admin);
+        $conversationId = $this->withToken($token)->postJson('/api/v1/conversations', [
+            'tenant_id' => $tenant->id,
+        ])->json('data.conversation.id');
+
+        $this->withToken($token)->post('/api/v1/conversations/'.$conversationId.'/audio', [
+            'audio' => UploadedFile::fake()->createWithContent('note.wav', $this->wav()),
+            'language' => 'en',
+        ])->assertOk()
+            ->assertJsonPath('data.transcription.provider_configured', true)
+            ->assertJsonPath('data.transcription.transcript', 'Check availability for two guests.')
+            ->assertJsonPath('data.transcription.status', 'transcribed');
+
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.openai.com/v1/audio/transcriptions'
+            && $request->hasHeader('Authorization', 'Bearer test-key'));
 
         $this->assertSame(0, AiOperationRequest::query()->count());
         $this->assertSame(0, SimBooking::query()->count());

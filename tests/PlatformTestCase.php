@@ -19,7 +19,6 @@ abstract class PlatformTestCase extends TestCase
         parent::setUp();
         clearSettingsCache();
         config([
-            'gekko.analyzer' => 'deterministic',
             'gekko.allow_live_connectors' => false,
         ]);
     }

@@ -1,17 +1,6 @@
 <?php
 
 return [
-    /*
-    | Analyzer used for instructions.
-    | deterministic — bounded parser, no network, used for tests and as the safety baseline.
-    | http — the Python AI service. If it is unreachable, the platform falls back to the
-    |        deterministic parser and records that fallback. Eligibility is always recalculated.
-    */
-    'analyzer' => env('GEKKO_ANALYZER', 'deterministic'),
-    'ai_service_url' => env('AI_SERVICE_URL', 'http://127.0.0.1:8090'),
-    'ai_service_token' => env('AI_SERVICE_TOKEN'),
-    'ai_service_timeout' => (int) env('AI_SERVICE_TIMEOUT', 8),
-
     'timezone' => env('GEKKO_DEFAULT_TIMEZONE', 'Asia/Manila'),
 
     // Writes stay in simulation until a connector mode is switched to live on purpose.
@@ -19,6 +8,14 @@ return [
 
     // Test hook. Production must leave this false.
     'simulate_timeout_after_commit' => false,
+
+    /*
+    | Speech transcription for workspace and mobile voice.
+    | none — store the recording and ask for a typed transcript.
+    | openai — OpenAI audio transcriptions (needs OPENAI_API_KEY).
+    | huggingface — Hugging Face inference speech model (needs HUGGINGFACE_TOKEN).
+    */
+    'speech_provider' => env('SPEECH_PROVIDER', 'none'),
 
     'audio_max_kilobytes' => (int) env('AUDIO_MAX_KB', 8192),
     'audio_max_seconds' => (int) env('AUDIO_MAX_SECONDS', 60),

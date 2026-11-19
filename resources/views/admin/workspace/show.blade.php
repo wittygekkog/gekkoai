@@ -99,7 +99,7 @@
                 @csrf
                 <input type="hidden" name="transcription_id" value="{{ session('transcript_id') }}">
                 <label class="form-label" for="corrected_transcript">Confirmed transcript</label>
-                <textarea id="corrected_transcript" name="corrected_transcript" class="form-control" required></textarea>
+                <textarea id="corrected_transcript" name="corrected_transcript" class="form-control" required>{{ old('corrected_transcript', $pendingTranscript?->transcript) }}</textarea>
                 <button class="btn btn-gk mt-2" type="submit">Use this transcript</button>
             </form>
         @endif
@@ -115,7 +115,7 @@
         <div class="mic-bar d-none" id="micBar" role="status" aria-live="polite">
             <span class="mic-dot" aria-hidden="true"></span>
             <span class="mic-timer" id="micTimer">00:00</span>
-            <span class="mic-note" id="micNote">Press the microphone again to send. Nothing leaves this browser until then.</span>
+            <span class="mic-note" id="micNote">Press the microphone again to send the recording for transcription. Confirm the words before they become an instruction.</span>
             <button class="btn btn-outline-secondary btn-sm ms-auto" id="micCancel" type="button">Cancel</button>
         </div>
         <form id="audioForm" method="post" action="{{ route('admin.workspace.audio', $conversation) }}" enctype="multipart/form-data">

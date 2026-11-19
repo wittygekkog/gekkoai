@@ -61,8 +61,15 @@ class WorkspaceController extends Controller
             ->limit(30)
             ->get();
         $operation = $conversation->operations->first();
+        $pendingTranscript = null;
+        $transcriptId = $request->session()->get('transcript_id');
+        if (is_string($transcriptId) && $transcriptId !== '') {
+            $pendingTranscript = AiTranscription::query()
+                ->where('tenant_id', $conversation->tenant_id)
+                ->find($transcriptId);
+        }
 
-        return view('admin.workspace.show', compact('conversation', 'tenants', 'conversations', 'operation'));
+        return view('admin.workspace.show', compact('conversation', 'tenants', 'conversations', 'operation', 'pendingTranscript'));
     }
 
     public function message(MessageRequest $request, AiConversation $conversation): RedirectResponse
@@ -85,10 +92,19 @@ class WorkspaceController extends Controller
             'audio' => ['required', 'file', 'max:'.config('gekko.audio_max_kilobytes'), 'mimetypes:audio/webm,audio/wav,audio/x-wav,audio/mpeg,audio/ogg,audio/mp4,video/webm'],
         ]);
         $transcription = $this->audioIntake->store($conversation, $data['audio'], null);
+        $meta = is_array($transcription->transcription_metadata) ? $transcription->transcription_metadata : [];
+        $hasWords = is_string($transcription->transcript) && trim($transcription->transcript) !== '';
+        if ($hasWords) {
+            $notice = 'The recording was transcribed. Review the words, then send them.';
+        } elseif (($meta['status'] ?? '') === 'provider_error') {
+            $notice = (string) ($meta['detail'] ?? 'The speech service did not return words. Type them below.');
+        } else {
+            $notice = 'Recording stored. No transcription model is configured, so confirm the words below before they are sent.';
+        }
 
         return redirect()->route('admin.workspace.show', $conversation)
             ->with('transcript_id', $transcription->id)
-            ->with('success', 'Recording stored. No transcription model is configured, so confirm the words below before they are sent.');
+            ->with('success', $notice);
     }
 
     public function confirmTranscript(Request $request, AiConversation $conversation): RedirectResponse
@@ -145,8 +161,8 @@ class WorkspaceController extends Controller
         $conversation->user_id = $request->user('admin')->id;
         $conversation->title = 'New conversation';
         $conversation->status = 'open';
-        $conversation->model_provider = config('gekko.analyzer') === 'http' ? 'http' : 'deterministic';
-        $conversation->model_name = config('gekko.analyzer') === 'http' ? 'configured-provider' : 'Gekko baseline parser';
+        $conversation->model_provider = 'deterministic';
+        $conversation->model_name = 'Gekko baseline parser';
         $conversation->save();
 
         return $conversation;
