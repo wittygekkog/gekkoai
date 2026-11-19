@@ -5,7 +5,7 @@
 <div class="page-head d-flex justify-content-between align-items-center gap-3 flex-wrap">
     <div class="min-w-0">
         <h1>Objective</h1>
-        <p>The outcome this SBU is working toward, in one sentence. It does not grant a tool or override Logic.</p>
+        <p>The outcome this SBU is working toward, in one sentence. It does not grant a tool or override Rules.</p>
     </div>
     @if ($canManage)
         <button class="btn btn-gk flex-shrink-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#objectiveChat" data-objective-mode="create">Add an objective</button>

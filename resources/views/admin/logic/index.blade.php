@@ -1,10 +1,10 @@
 @extends('admin.layouts.app')
-@section('title', 'Logic')
-@section('crumb', 'Logic')
+@section('title', 'Rules')
+@section('crumb', 'Rules')
 @section('content')
 <div class="page-head d-flex justify-content-between align-items-center gap-3 flex-wrap">
     <div class="min-w-0">
-        <h1>Logic</h1>
+        <h1>Rules</h1>
         <p>Rules the workspace must follow. A rule does not grant a tool or skip approval.</p>
     </div>
     @if ($canManage)

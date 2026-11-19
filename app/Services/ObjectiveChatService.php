@@ -90,11 +90,11 @@ final class ObjectiveChatService
     private function reply(bool $editing, bool $blocked): string
     {
         if ($blocked) {
-            return 'I kept this to one outcome and removed the part that would skip Logic or approval.';
+            return 'I kept this to one outcome and removed the part that would skip Rules or approval.';
         }
 
         return $editing
-            ? 'Updated objective. It stays one outcome and does not override Logic. Save it, or tell me what to change.'
+            ? 'Updated objective. It stays one outcome and does not override Rules. Save it, or tell me what to change.'
             : 'Draft ready. I wrote it as one outcome. Save it, or tell me what to change.';
     }
 

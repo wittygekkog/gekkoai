@@ -56,7 +56,10 @@
                 <i class="bi bi-bullseye"></i> Objective
             </a>
             <a href="{{ route('admin.logic.index') }}" class="{{ $linkActive('admin.logic.*') }}" @if(request()->routeIs('admin.logic.*')) aria-current="page" @endif>
-                <i class="bi bi-diagram-3"></i> Logic
+                <i class="bi bi-diagram-3"></i> Rules
+            </a>
+            <a href="{{ route('admin.knowledge.index') }}" class="{{ $linkActive('admin.knowledge.*') }}" @if(request()->routeIs('admin.knowledge.*')) aria-current="page" @endif>
+                <i class="bi bi-journal-text"></i> Data
             </a>
             <a href="{{ route('admin.operations.index') }}" class="{{ $linkActive('admin.operations.*') }}" @if(request()->routeIs('admin.operations.*')) aria-current="page" @endif>
                 <i class="bi bi-clock-history"></i> Logs
@@ -66,9 +69,6 @@
             </a>
             <a href="{{ route('admin.escalations.index') }}" class="{{ $linkActive('admin.escalations.*') }}" @if(request()->routeIs('admin.escalations.*')) aria-current="page" @endif>
                 <i class="bi bi-exclamation-triangle"></i> Flags
-            </a>
-            <a href="{{ route('admin.knowledge.index') }}" class="{{ $linkActive('admin.knowledge.*') }}" @if(request()->routeIs('admin.knowledge.*')) aria-current="page" @endif>
-                <i class="bi bi-journal-text"></i> Data
             </a>
             <form method="post" action="{{ route('admin.tenant.switch') }}">
                 @csrf

@@ -30,7 +30,7 @@ class ObjectivePageTest extends PlatformTestCase
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.body', 'Help guests book easily.')
-            ->assertJsonPath('message', 'I kept this to one outcome and removed the part that would skip Logic or approval.');
+            ->assertJsonPath('message', 'I kept this to one outcome and removed the part that would skip Rules or approval.');
 
         $this->actingAs($admin, 'admin')
             ->withSession(['selected_tenant_id' => $tenant->id])

@@ -73,7 +73,7 @@ class ObjectiveController extends Controller
     {
         $this->objectives->store($request->user('admin'), $request->validated());
 
-        return back()->with('success', 'Objective saved. It does not override Logic or grant a tool.');
+        return back()->with('success', 'Objective saved. It does not override Rules or grant a tool.');
     }
 
     public function update(ObjectiveItemRequest $request, AiLogicItem $objective): RedirectResponse
